@@ -33,7 +33,7 @@ const (
 )
 
 var kubeconfig = flag.String("kubeconfig", "", "Path to kubeconfig")
-var logicalClusterTarget = flag.String("logical-cluster", "*", "set the target logical cluster")
+var logicalClusterTarget = flag.String("logical-cluster", os.GetEnvString("GLBC_LOGICAL_CLUSTER_TARGET", "*"), "set the target logical cluster")
 var glbcKubeconfig = flag.String("glbc-kubeconfig", "", "Path to GLBC kubeconfig")
 var tlsProviderEnabled = flag.Bool("glbc-tls-provided", os.GetEnvBool("GLBC_TLS_PROVIDED", false), "when set to true glbc will generate LE certs for hosts it creates")
 var tlsProvider = flag.String("glbc-tls-provider", os.GetEnvString("GLBC_TLS_PROVIDER", "le-staging"), "decides which provider to use. Current allowed values -glbc-tls-provider=le-staging -glbc-tls-provider=le-production ")

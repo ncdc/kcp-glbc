@@ -122,6 +122,7 @@ kubectl -n kcp-glbc edit configmap kcp-glbc-controller-config
 | `GLBC_TLS_PROVIDED` | Generate TLS certs for glbc managed hosts | false |
 | `GLBC_TLS_PROVIDER` | TLS Cert provider to use, one of [le-staging, le-production] | le-staging |
 | `HCG_LE_EMAIL` | EMail address to use during LE cert requests | kuadrant-dev@redhat.com |
+| `GLBC_LOGICAL_CLUSTER_TARGET` | logical cluster to target | root:rh-sso-15897946:glbc |
 
 ### Applying configuration changes
 
