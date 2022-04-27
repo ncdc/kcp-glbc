@@ -236,10 +236,10 @@ func (c *Controller) setEndpointsFromIngress(ctx context.Context, ingress *netwo
 		currentEndpoints[address] = endpoint
 	}
 
-	newEndpoints := make([]*v1.Endpoint, len(targets))
+	var newEndpoints []*v1.Endpoint
 
 	for _, ingressTargets := range targets {
-		for i, target := range ingressTargets {
+		for _, target := range ingressTargets {
 			var endpoint *v1.Endpoint
 			ok := false
 
@@ -250,7 +250,7 @@ func (c *Controller) setEndpointsFromIngress(ctx context.Context, ingress *netwo
 				}
 			}
 
-			newEndpoints[i] = endpoint
+			newEndpoints = append(newEndpoints, endpoint)
 
 			// Update the endpoint fields
 			endpoint.DNSName = hostname

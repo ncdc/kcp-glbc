@@ -43,8 +43,10 @@ func (w *HostsWatcher) StartWatching(ctx context.Context, obj interface{}, host 
 		}
 	}
 
+	c, cancel := context.WithCancel(ctx)
+
 	recordWatcher := recordWatcher{
-		stopCh:        make(chan struct{}),
+		cancel:        cancel,
 		resolver:      w.Resolver,
 		Host:          host,
 		Key:           obj,
@@ -52,7 +54,7 @@ func (w *HostsWatcher) StartWatching(ctx context.Context, obj interface{}, host 
 		Records:       []HostAddress{},
 		WatchInterval: w.WatchInterval,
 	}
-	recordWatcher.Watch(ctx)
+	recordWatcher.Watch(c)
 
 	w.Records = append(w.Records, recordWatcher)
 
@@ -77,7 +79,7 @@ func (w *HostsWatcher) StopWatching(obj interface{}) {
 
 type recordWatcher struct {
 	resolver HostResolver
-	stopCh   chan struct{}
+	cancel   context.CancelFunc
 
 	Key           interface{}
 	OnChange      func(key interface{})
@@ -95,8 +97,6 @@ func (w *recordWatcher) Watch(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				return
-			case <-w.stopCh:
 				return
 			default:
 			}
@@ -149,5 +149,5 @@ func (w *recordWatcher) updateRecords(newRecords []HostAddress) bool {
 
 func (w *recordWatcher) Stop() {
 	klog.V(3).Infof("Stopping record watcher for %s/%s", w.Key, w.Host)
-	close(w.stopCh)
+	w.cancel()
 }
