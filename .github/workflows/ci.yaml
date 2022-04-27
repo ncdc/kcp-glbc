@@ -2,14 +2,18 @@ name: CI
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
+      - 'release-*'
     paths-ignore:
       - '**.adoc'
       - '**.md'
       - 'samples/**'
       - 'LICENSE'
   pull_request:
-    branches: ["main"]
+    branches:
+      - main
+      - 'release-*'
     paths-ignore:
       - '**.adoc'
       - '**.md'
