@@ -28,11 +28,15 @@ spec:
             - /kcp-glbc
           args:
             - --kubeconfig=/tmp/kcp/kubeconfig
-            - --glbc-kubeconfig=/tmp/glbc/kubeconfig
           image: controller:latest
           name: manager
           securityContext:
             allowPrivilegeEscalation: false
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           envFrom:
             - secretRef:
                 name: aws-credentials
@@ -55,17 +59,10 @@ spec:
             - name: kcp-kubeconfig
               mountPath: "/tmp/kcp"
               readOnly: true
-            - name: glbc-kubeconfig
-              mountPath: "/tmp/glbc"
-              readOnly: true
       serviceAccountName: kcp-glbc-controller-manager
       terminationGracePeriodSeconds: 10
       volumes:
         - name: kcp-kubeconfig
           secret:
             secretName: kcp-kubeconfig
-            optional: false
-        - name: glbc-kubeconfig
-          secret:
-            secretName: glbc-kubeconfig
             optional: false

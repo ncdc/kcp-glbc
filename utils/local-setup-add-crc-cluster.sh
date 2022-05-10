@@ -34,7 +34,7 @@
 # "v1.22.7"
 # $ kubectl --context kind-kcp-cluster-2 version -o json | jq .serverVersion.gitVersion
 # "v1.22.7"
-# $ kubectl get clusters -o wide
+# $ kubectl get workloadclusters -o wide
 # NAME              LOCATION          READY   SYNCED API RESOURCES
 # kcp-cluster-1     kcp-cluster-1     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
 # kcp-cluster-2     kcp-cluster-2     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
@@ -43,15 +43,20 @@
 set -e pipefail
 
 TEMP_DIR="./tmp"
-CRC_KUBECONFIG="crc.kubeconfig"
 CRC_CLUSTER_NAME=kcp-cluster-crc
+CRC_KUBECONFIG="${CRC_CLUSTER_NAME}.kubeconfig"
 PULL_SECRET=~/pull-secret
+
+crc config set enable-cluster-monitoring true
 
 crc start -p $PULL_SECRET
 
 cp ~/.crc/machines/crc/kubeconfig ${TEMP_DIR}/${CRC_KUBECONFIG}
+cp ${TEMP_DIR}/${CRC_KUBECONFIG} ${TEMP_DIR}/${CRC_KUBECONFIG}.internal
 
 cat ${TEMP_DIR}/${CRC_KUBECONFIG} | sed -e 's/^/    /' | cat utils/kcp-contrib/cluster.yaml - | sed -e "s/name: local/name: ${CRC_CLUSTER_NAME}/" >${TEMP_DIR}/${CRC_CLUSTER_NAME}.yaml
 
 echo "Registering crc cluster into KCP"
 KUBECONFIG=.kcp/admin.kubeconfig kubectl apply -f ${TEMP_DIR}/${CRC_CLUSTER_NAME}.yaml
+
+kubectl --context crc-admin -n openshift-monitoring apply -f config/observability/openshift/grafana/cluster-monitoring-config.yaml

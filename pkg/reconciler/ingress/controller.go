@@ -2,7 +2,6 @@ package ingress
 
 import (
 	"context"
-	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -51,7 +50,6 @@ func NewController(config *ControllerConfig) *Controller {
 		dnsRecordClient:       config.DnsRecordClient,
 		domain:                config.Domain,
 		tracker:               &tracker,
-		tlsEnabled:            config.TLSEnabled,
 		hostResolver:          hostResolver,
 		hostsWatcher: net.NewHostsWatcher(
 			hostResolver,
@@ -61,7 +59,7 @@ func NewController(config *ControllerConfig) *Controller {
 		ingressPlacer:      ingressPlacer,
 	}
 	c.Process = c.process
-	c.hostsWatcher.OnChange = c.synchronisedEnqueue()
+	c.hostsWatcher.OnChange = c.Enqueue
 
 	// Watch for events related to Ingresses
 	c.sharedInformerFactory.Networking().V1().Ingresses().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -87,7 +85,6 @@ type ControllerConfig struct {
 	DnsRecordClient       kuadrantv1.ClusterInterface
 	SharedInformerFactory informers.SharedInformerFactory
 	Domain                *string
-	TLSEnabled            bool
 	CertProvider          tls.Provider
 	HostResolver          net.HostResolver
 	CustomHostsEnabled    *bool
@@ -102,7 +99,6 @@ type Controller struct {
 	lister                networkingv1lister.IngressLister
 	certProvider          tls.Provider
 	domain                *string
-	tlsEnabled            bool
 	tracker               *tracker
 	hostResolver          net.HostResolver
 	hostsWatcher          *net.HostsWatcher
@@ -157,16 +153,5 @@ func (c *Controller) ingressesFromService(obj interface{}) {
 	for _, ingress := range ingresses.List() {
 		klog.Infof("tracked service %q triggered Ingress %q reconciliation", service.Name, ingress)
 		c.Queue.Add(ingress)
-	}
-}
-
-// synchronisedEnqueue returns a function to be passed to the host watcher that
-// enqueues the affected object to be reconciled by c, in a synchronized fashion
-func (c *Controller) synchronisedEnqueue() func(obj interface{}) {
-	var mu sync.Mutex
-	return func(obj interface{}) {
-		mu.Lock()
-		defer mu.Unlock()
-		c.Enqueue(obj)
 	}
 }

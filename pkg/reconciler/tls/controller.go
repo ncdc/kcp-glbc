@@ -3,12 +3,11 @@ package tls
 import (
 	"context"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/informers"
+	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	secretsv1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -23,34 +22,31 @@ const (
 )
 
 type ControllerConfig struct {
-	// this is targeting our own kube api not KCP
-	GlbcKubeClient        kubernetes.Interface
-	SharedInformerFactory informers.SharedInformerFactory
-	KcpClient             kubernetes.ClusterInterface
+	GlbcKubeClient     kubernetes.Interface
+	GlbcSecretInformer corev1informers.SecretInformer
+	KcpKubeClient      kubernetes.ClusterInterface
 }
 
 type Controller struct {
 	*reconciler.Controller
-	glbcKubeClient        kubernetes.Interface
-	lister                secretsv1lister.SecretLister
-	indexer               cache.Indexer
-	sharedInformerFactory informers.SharedInformerFactory
-	kcpClient             kubernetes.ClusterInterface
+	glbcKubeClient     kubernetes.Interface
+	glbcSecretInformer corev1informers.SecretInformer
+	kcpKubeClient      kubernetes.ClusterInterface
 }
 
 func NewController(config *ControllerConfig) (*Controller, error) {
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 	c := &Controller{
-		Controller:            reconciler.NewController(controllerName, queue),
-		glbcKubeClient:        config.GlbcKubeClient,
-		kcpClient:             config.KcpClient,
-		sharedInformerFactory: config.SharedInformerFactory,
+		Controller:         reconciler.NewController(controllerName, queue),
+		glbcKubeClient:     config.GlbcKubeClient,
+		kcpKubeClient:      config.KcpKubeClient,
+		glbcSecretInformer: config.GlbcSecretInformer,
 	}
 	c.Process = c.process
 
-	c.sharedInformerFactory.Core().V1().Secrets().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	c.glbcSecretInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			secret := obj.(*v1.Secret)
+			secret := obj.(*corev1.Secret)
 			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
 			hostname, hasHostname := secret.Annotations[cluster.ANNOTATION_HCG_HOST]
 			if hasIssuer && hasHostname {
@@ -62,7 +58,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 			c.Enqueue(obj)
 		},
 		DeleteFunc: func(obj interface{}) {
-			secret := obj.(*v1.Secret)
+			secret := obj.(*corev1.Secret)
 			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
 			hostname, hasHostname := secret.Annotations[cluster.ANNOTATION_HCG_HOST]
 			if hasIssuer && hasHostname {
@@ -72,14 +68,11 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		},
 	})
 
-	c.indexer = c.sharedInformerFactory.Core().V1().Secrets().Informer().GetIndexer()
-	c.lister = c.sharedInformerFactory.Core().V1().Secrets().Lister()
-
 	return c, nil
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {
-	obj, exists, err := c.indexer.GetByKey(key)
+	obj, exists, err := c.glbcSecretInformer.Informer().GetIndexer().GetByKey(key)
 	if err != nil {
 		return err
 	}
@@ -88,7 +81,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 		klog.Infof("Object with key %q was deleted", key)
 		return nil
 	}
-	current := obj.(*v1.Secret)
+	current := obj.(*corev1.Secret)
 
 	previous := current.DeepCopy()
 	if err := c.reconcile(ctx, current); err != nil {

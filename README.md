@@ -87,6 +87,20 @@ $ make e2e
 
 Alternatively, You can run the KCP GLBC and/or the tests from your IDE / debugger.
 
+### Local development on a mac
+MacOS does not default to allowing you to communicate with ports running in docker containers from the host machine. To bypass this limitation we can use `docker-mac-net-connect`:
+```
+# Install via Homebrew
+$ brew install chipmk/tap/docker-mac-net-connect
+
+# Run the service and register it to launch at boot
+$ sudo brew services start chipmk/tap/docker-mac-net-connect
+```
+
+This is done automatically as part of the `make local-setup` but will require presenting a sudo password to start the service if it is not configured to autostart.
+
+N.B. This does not remove the requirement to have the DNS records created in a valid DNS service (e.g. route53 in AWS).
+
 ## Overall diagram
 
 ```

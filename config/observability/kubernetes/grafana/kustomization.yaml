@@ -1,0 +1,8 @@
+## Adds namespace to all resources.
+namespace: kcp-glbc-observability
+
+resources:
+  - ../../../grafana/operator
+  - ../../../grafana
+  - ingress.yaml
+  - prometheus-grafanadatasource.yaml

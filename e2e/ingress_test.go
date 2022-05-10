@@ -13,11 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	appsv1apply "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1apply "k8s.io/client-go/applyconfigurations/core/v1"
-	v1apply "k8s.io/client-go/applyconfigurations/meta/v1"
-	networkingv1apply "k8s.io/client-go/applyconfigurations/networking/v1"
 
 	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
@@ -29,10 +25,9 @@ import (
 	kuadrantcluster "github.com/kuadrant/kcp-glbc/pkg/cluster"
 )
 
-var applyOptions = metav1.ApplyOptions{FieldManager: "kcp-glbc-e2e", Force: true}
-
 func TestIngress(t *testing.T) {
 	test := With(t)
+	test.T().Parallel()
 	// Create the test workspace
 	workspace := test.NewTestWorkspace()
 
@@ -158,48 +153,4 @@ func TestIngress(t *testing.T) {
 	test.Expect(test.Client().Core().Cluster(logicalcluster.From(namespace)).AppsV1().Deployments(namespace.Name).
 		Delete(test.Ctx(), name, metav1.DeleteOptions{})).
 		To(Succeed())
-
-}
-
-func ingressConfiguration(namespace, name string) *networkingv1apply.IngressApplyConfiguration {
-	return networkingv1apply.Ingress(name, namespace).WithSpec(
-		networkingv1apply.IngressSpec().WithRules(networkingv1apply.IngressRule().
-			WithHost("test.gblb.com").
-			WithHTTP(networkingv1apply.HTTPIngressRuleValue().
-				WithPaths(networkingv1apply.HTTPIngressPath().
-					WithPath("/").
-					WithPathType(networkingv1.PathTypePrefix).
-					WithBackend(networkingv1apply.IngressBackend().
-						WithService(networkingv1apply.IngressServiceBackend().
-							WithName(name).
-							WithPort(networkingv1apply.ServiceBackendPort().
-								WithName("http"))))))))
-}
-
-func deploymentConfiguration(namespace, name string) *appsv1apply.DeploymentApplyConfiguration {
-	return appsv1apply.Deployment(name, namespace).
-		WithSpec(appsv1apply.DeploymentSpec().
-			WithSelector(v1apply.LabelSelector().WithMatchLabels(map[string]string{"app": name})).
-			WithTemplate(corev1apply.PodTemplateSpec().
-				WithLabels(map[string]string{"app": name}).
-				WithSpec(corev1apply.PodSpec().
-					WithContainers(corev1apply.Container().
-						WithName("echo-server").
-						WithImage("jmalloc/echo-server").
-						WithPorts(corev1apply.ContainerPort().
-							WithName("http").
-							WithContainerPort(8080).
-							WithProtocol(corev1.ProtocolTCP))))))
-}
-
-func serviceConfiguration(namespace, name string, annotations map[string]string) *corev1apply.ServiceApplyConfiguration {
-	return corev1apply.Service(name, namespace).
-		WithAnnotations(annotations).
-		WithSpec(corev1apply.ServiceSpec().
-			WithSelector(map[string]string{"app": name}).
-			WithPorts(corev1apply.ServicePort().
-				WithName("http").
-				WithPort(80).
-				WithTargetPort(intstr.FromString("http")).
-				WithProtocol(corev1.ProtocolTCP)))
 }

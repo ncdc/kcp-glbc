@@ -1,12 +1,11 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: kcp-glbc-manager-rolebinding
+  name: kcp-glbc-controller-manager
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: kcp-glbc-manager-role
+  kind: Role
+  name: kcp-glbc-controller-manager
 subjects:
   - kind: ServiceAccount
     name: kcp-glbc-controller-manager
-    namespace: system

@@ -1,0 +1,13 @@
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDataSource
+metadata:
+  name: prometheus-grafanadatasource
+spec:
+  name: prometheus-grafanadatasource.yaml
+  datasources:
+    - name: Prometheus
+      type: prometheus
+      url: 'http://prometheus-k8s.monitoring.svc:9090'
+      access: proxy
+      editable: true
+      isDefault: true

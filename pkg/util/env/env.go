@@ -5,6 +5,8 @@ import (
 	"strconv"
 )
 
+const namespaceEnvVariable = "NAMESPACE"
+
 func GetEnvString(key, fallback string) string {
 	value, found := os.LookupEnv(key)
 	if !found {
@@ -23,4 +25,8 @@ func GetEnvBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return value
+}
+
+func GetNamespace() string {
+	return GetEnvString(namespaceEnvVariable, "")
 }

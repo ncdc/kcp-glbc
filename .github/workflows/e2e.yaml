@@ -104,7 +104,7 @@ jobs:
           kind get kubeconfig --name=kcp-cluster-1 > "${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-1.kubeconfig
           kind get kubeconfig --name=kcp-cluster-2 > "${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-2.kubeconfig
 
-          echo "Deploying Ingress controller to KinD clusters"
+          echo "Deploying Ingress controller to KinD workload clusters"
           VERSION=$(curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/stable.txt)
 
           kubectl config use-context kind-kcp-cluster-1
@@ -114,6 +114,11 @@ jobs:
           kubectl config use-context kind-kcp-cluster-2
           curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
           kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
+
+          echo "Deploying cert-manager to GLBC control cluster"
+          kubectl config use-context kind-glbc
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
+          kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
 
           KCP_LOG_FILE="${TEMP_DIR}"/kcp.log
           echo "KCP_LOG_FILE=${KCP_LOG_FILE}" >> $GITHUB_ENV
@@ -144,7 +149,7 @@ jobs:
           GLBC_LOG_FILE="${TEMP_DIR}"/glbc.log
           echo "GLBC_LOG_FILE=${GLBC_LOG_FILE}" >> $GITHUB_ENV
           echo "Starting GLBC, sending logs to ${GLBC_LOG_FILE}"
-          ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --glbc-kubeconfig "${HOME}"/.kube/config --dns-provider fake > ${GLBC_LOG_FILE} 2>&1 &
+          ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --glbc-kubeconfig "${HOME}"/.kube/config --dns-provider fake --glbc-tls-provided true > ${GLBC_LOG_FILE} 2>&1 &
           GLBC_PID=$!
           echo "GLBC_PID=${GLBC_PID}" >> $GITHUB_ENV
 

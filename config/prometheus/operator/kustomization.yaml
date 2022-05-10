@@ -1,0 +1,7 @@
+# https://github.com/prometheus-operator/kube-prometheus/
+
+resources:
+  - github.com/prometheus-operator/kube-prometheus?ref=release-0.10
+
+patchesStrategicMerge:
+  - cluster_role.yaml

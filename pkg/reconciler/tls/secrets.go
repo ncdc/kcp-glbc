@@ -77,7 +77,7 @@ func AddFinalizer(secret *v1.Secret, finalizer string) {
 }
 
 func (c *Controller) ensureDelete(ctx context.Context, kctx cluster.ObjectMapper, secret *v1.Secret) error {
-	if err := c.kcpClient.Cluster(logicalcluster.New(kctx.Workspace())).CoreV1().Secrets(kctx.Namespace()).Delete(ctx, kctx.Name(), metav1.DeleteOptions{}); err != nil && !k8errors.IsNotFound(err) {
+	if err := c.kcpKubeClient.Cluster(logicalcluster.New(kctx.Workspace())).CoreV1().Secrets(kctx.Namespace()).Delete(ctx, kctx.Name(), metav1.DeleteOptions{}); err != nil && !k8errors.IsNotFound(err) {
 		return err
 	}
 	return nil
@@ -94,8 +94,8 @@ func (c *Controller) ensureMirrored(ctx context.Context, kctx cluster.ObjectMapp
 		Data: secret.Data,
 		Type: secret.Type,
 	}
-	secretClient := c.kcpClient.Cluster(logicalcluster.New(kctx.Workspace())).CoreV1().Secrets(kctx.Namespace())
-	// using kcpClient here to target the KCP cluster
+	// using the KCP client here to target the KCP cluster
+	secretClient := c.kcpKubeClient.Cluster(logicalcluster.New(kctx.Workspace())).CoreV1().Secrets(kctx.Namespace())
 	_, err := secretClient.Create(ctx, mirror, metav1.CreateOptions{})
 	if err != nil {
 		if !k8errors.IsAlreadyExists(err) {
@@ -112,7 +112,7 @@ func (c *Controller) ensureMirrored(ctx context.Context, kctx cluster.ObjectMapp
 		}
 	}
 	// find the Ingress this Secret is for and add an annotation to notify TLS certificate is ready and trigger reconcile
-	ingressClient := c.kcpClient.Cluster(logicalcluster.New(kctx.Workspace())).NetworkingV1().Ingresses(kctx.Namespace())
+	ingressClient := c.kcpKubeClient.Cluster(logicalcluster.New(kctx.Workspace())).NetworkingV1().Ingresses(kctx.Namespace())
 	rootIngress, err := ingressClient.Get(ctx, kctx.OwnedBy(), metav1.GetOptions{})
 	if err != nil {
 		return err

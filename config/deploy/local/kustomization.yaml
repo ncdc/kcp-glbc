@@ -4,7 +4,6 @@
 # controller-config.env
 # aws-credentials.env
 # kcp.kubeconfig
-# glbc.kubeconfig
 #
 # These can be generated using `make generate-ld-config` and then modified as required.
 # `make generate-ld-config` creates configuration for the local dev environment so you must have ran `make local-setup` first.
@@ -26,10 +25,6 @@ secretGenerator:
     behavior: replace
     files:
       - kubeconfig=kcp.kubeconfig
-  - name: glbc-kubeconfig
-    behavior: replace
-    files:
-      - kubeconfig=glbc.kubeconfig
   - name: aws-credentials
     behavior: replace
     envs:

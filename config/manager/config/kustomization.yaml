@@ -9,5 +9,4 @@ configMapGenerator:
 
 secretGenerator:
 - name: kcp-kubeconfig
-- name: glbc-kubeconfig
 - name: aws-credentials

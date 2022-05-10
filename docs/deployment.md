@@ -71,7 +71,6 @@ $ tree -I '*.yaml|*.template' config/deploy/local/
 config/deploy/local/
 ├── aws-credentials.env
 ├── controller-config.env
-├── glbc.kubeconfig
 └── kcp.kubeconfig
 ```
 
@@ -96,15 +95,6 @@ during installation, but can be replaced with:
 
 ```
 kubectl -n kcp-glbc create secret generic kcp-glbc-kcp-kubeconfig --from-file=kubeconfig=$(KCP_KUBECONFIG)
-```
-
-### GLBC Control Cluster Kubeconfig (Required)
-
-A secret `secret/kcp-glbc-glbc-kubeconfig` containing the GLBC control clusters kubeconfig. This is the cluster running cert manager. 
-An empty secret is created by default during installation, but can be replaced with:
-
-```
-kubectl -n kcp-glbc create secret generic kcp-glbc-glbc-kubeconfig --from-file=kubeconfig=$(GLBC_KUBECONFIG)
 ```
 
 ### AWS Credentials (Optional) 

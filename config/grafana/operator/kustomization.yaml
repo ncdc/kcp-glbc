@@ -1,0 +1,7 @@
+#https://github.com/grafana-operator/grafana-operator/blob/master/documentation/deploy_grafana.md
+
+resources:
+  - github.com/grafana-operator/grafana-operator/deploy/manifests?ref=v4.2.0
+
+patchesStrategicMerge:
+  - security_context.yaml

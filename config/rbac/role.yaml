@@ -1,8 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
-  creationTimestamp: null
-  name: kcp-glbc-manager-role
+  name: kcp-glbc-controller-manager
 rules:
   - apiGroups:
       - ""

@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 /*
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -12,29 +15,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tls
+package support
 
-import "context"
+import (
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 
-type FakeProvider struct{}
+	corev1 "k8s.io/api/core/v1"
+)
 
-var _ Provider = &FakeProvider{}
-
-func (p *FakeProvider) IssuerID() string {
-	return "fake"
-}
-
-func (p *FakeProvider) Domains() []string {
-	return nil
-}
-
-func (p *FakeProvider) Create(_ context.Context, _ CertificateRequest) error {
-	return nil
-}
-func (p *FakeProvider) Delete(_ context.Context, _ CertificateRequest) error {
-	return nil
-}
-
-func (p *FakeProvider) Initialize(_ context.Context) error {
-	return nil
+func CertificateFrom(secret *corev1.Secret) (*x509.Certificate, error) {
+	certBytes := secret.Data["tls.crt"]
+	pemBlock, _ := pem.Decode(certBytes)
+	if pemBlock == nil {
+		return nil, errors.New("failed to decode certificate")
+	}
+	cert, err := x509.ParseCertificate(pemBlock.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	return cert, err
 }

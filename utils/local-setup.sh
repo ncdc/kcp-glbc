@@ -16,11 +16,17 @@
 # limitations under the License.
 #
 
+DO_BREW="false"
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
 usage() { echo "usage: ./local-setup.sh -c <number of clusters>" 1>&2; exit 1; }
-while getopts ":c:" arg; do
+while getopts ":bc:" arg; do
   case "${arg}" in
     c)
       NUM_CLUSTERS=${OPTARG}
+      ;;
+    b)
+      DO_BREW="true"
       ;;
     *)
       usage
@@ -29,6 +35,13 @@ while getopts ":c:" arg; do
 done
 shift $((OPTIND-1))
 
+if [[ "$DO_BREW" == "true" ]]; then
+  if [[ "${OSTYPE}" =~ ^darwin.* ]]; then
+    ${SCRIPT_DIR}/macos/required_brew_packages.sh
+  fi
+else
+  echo "skipping brew"
+fi
 
 if [ -z "${NUM_CLUSTERS}" ]; then
     usage
@@ -48,6 +61,7 @@ export GOROOT
 export KIND_BIN="./bin/kind"
 export KCP_BIN="./bin/kcp"
 export KUBECTL_KCP_BIN="./bin/kubectl-kcp"
+export KUSTOMIZE_BIN="./bin/kustomize"
 TEMP_DIR="./tmp"
 KCP_LOG_FILE="${TEMP_DIR}"/kcp.log
 
@@ -61,17 +75,6 @@ do
 done
 
 mkdir -p ${TEMP_DIR}
-
-createGLBCCluster() {
-  ${KIND_BIN} create cluster --name ${KCP_GLBC_CLUSTER_NAME}
-  ${KIND_BIN} get kubeconfig --name=${KCP_GLBC_CLUSTER_NAME} > ${TEMP_DIR}/${KCP_GLBC_KUBECONFIG}
-  ${KIND_BIN} get kubeconfig --internal --name=${KCP_GLBC_CLUSTER_NAME} > ${TEMP_DIR}/${KCP_GLBC_KUBECONFIG}.internal
-
-  echo "Deploying cert manager to kind glbc cluster"
-  kubectl --context kind-${KCP_GLBC_CLUSTER_NAME} apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
-
-  kubectl --context kind-${KCP_GLBC_CLUSTER_NAME} -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
-}
 
 createCluster() {
   cluster=$1;
@@ -115,20 +118,26 @@ EOF
   } &>/dev/null
 }
 
+createGLBCCluster() {
+  createCluster "$KCP_GLBC_CLUSTER_NAME" $1 $2
+
+  kubectl config use-context kind-${KCP_GLBC_CLUSTER_NAME}
+
+  echo "Deploying cert manager to kind glbc cluster"
+  kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
+  kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
+}
+
 clusterCount=$(${KIND_BIN} get clusters | grep ${KIND_CLUSTER_PREFIX} | wc -l)
 if ! [[ $clusterCount =~ "0" ]] ; then
   echo "Deleting previous kind clusters."
   ${KIND_BIN} get clusters | grep ${KIND_CLUSTER_PREFIX} | xargs ${KIND_BIN} delete clusters
 fi
 
-echo "Deploying 1 kind k8s glbc cluster locally."
-
-createGLBCCluster
-
 echo "Deploying $NUM_CLUSTERS kind k8s clusters locally."
 
-port80=8080
-port443=8443
+port80=8081
+port443=8444
 for cluster in $CLUSTERS
 do
   createCluster "$cluster" $port80 $port443
@@ -136,6 +145,10 @@ do
   port443=$((port443+1))
 #move to next cluster
 done
+
+echo "Deploying 1 kind k8s glbc cluster locally."
+
+createGLBCCluster $port80 $port443
 
 echo "Starting KCP, sending logs to ${KCP_LOG_FILE}"
 ${KCP_BIN} start --push-mode --discovery-poll-interval 3s --run-controllers --resources-to-sync=secrets,deployments,services,ingresses.networking.k8s.io --auto-publish-apis > ${KCP_LOG_FILE} 2>&1 &
@@ -157,13 +170,16 @@ export KUBECONFIG=.kcp/admin.kubeconfig
 echo "Creating HCG Workspace"
 ${KUBECTL_KCP_BIN} workspace create kcp-glbc --enter
 
+echo "Waiting 15 seconds..."
+sleep 15
+
 echo "Registering HCG APIs"
 kubectl apply -f ./config/crd/bases
 kubectl apply -f ./utils/kcp-contrib/apiresourceschema.yaml
 kubectl apply -f ./utils/kcp-contrib/apiexport.yaml
 
 echo "Registering kind k8s clusters into KCP"
-kubectl apply $(find ./tmp/kcp-cluster-*.yaml | awk ' { print " -f " $1 } ')
+kubectl apply $(find ./tmp/ -name 'kcp-cluster-[[:digit:]]*.yaml' | awk ' { print " -f " $1 } ')
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"
