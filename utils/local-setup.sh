@@ -121,7 +121,7 @@ EOF
 createKCPWorkloadCluster() {
   createCluster $1 $2 $3
   echo "Deploying kcp syncer to ${1}"
-  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workload sync $1 --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services > ${TEMP_DIR}/${1}-syncer.yaml
+  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workload sync $1 --syncer-image=${KCP_SYNCER_IMAGE} --resources=services > ${TEMP_DIR}/${1}-syncer.yaml
   kubectl config use-context kind-${1}
   kubectl apply -f ${TEMP_DIR}/${1}-syncer.yaml
 }
@@ -139,10 +139,10 @@ createKCPWorkspace() {
   KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workspace create kcp-glbc --enter
   echo "Waiting 15 seconds..."
   sleep 15
-  echo "Registering HCG APIs"
-  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./config/crd/bases
-  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./utils/kcp-contrib/apiresourceschema.yaml
-  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./utils/kcp-contrib/apiexport.yaml
+#  echo "Registering HCG APIs"
+#  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./config/crd/bases
+#  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./utils/kcp-contrib/apiresourceschema.yaml
+#  kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f ./utils/kcp-contrib/apiexport.yaml
 }
 
 #Delete existing kind clusters
@@ -154,7 +154,7 @@ fi
 
 #1. Start KCP
 echo "Starting KCP, sending logs to ${KCP_LOG_FILE}"
-${KCP_BIN} start --discovery-poll-interval 3s --run-controllers > ${KCP_LOG_FILE} 2>&1 &
+${KCP_BIN} start --discovery-poll-interval 3s --run-controllers --feature-gates=KCPLocationAPI=true > ${KCP_LOG_FILE} 2>&1 &
 KCP_PID=$!
 
 if ! ps -p ${KCP_PID}; then
