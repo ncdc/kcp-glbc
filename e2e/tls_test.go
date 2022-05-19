@@ -20,6 +20,7 @@ package e2e
 import (
 	"crypto/x509/pkix"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -31,7 +32,7 @@ import (
 
 	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
-	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
+	conditionsapi "github.com/kcp-dev/kcp/third_party/conditions/apis/conditions/v1alpha1"
 
 	. "github.com/kuadrant/kcp-glbc/e2e/support"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
@@ -57,11 +58,11 @@ func TestTLS(t *testing.T) {
 		Should(BeTrue())
 
 	// Register workload cluster 1 into the test workspace
-	cluster1 := test.NewWorkloadCluster("kcp-cluster-1", WithKubeConfigByName, InWorkspace(workspace))
+	cluster1 := test.NewWorkloadCluster("kcp-cluster-1", InWorkspace(workspace), WithKubeConfigByName, Syncer().ResourcesToSync(GLBCResources...))
 
 	// Wait until cluster 1 is ready
-	test.Eventually(WorkloadCluster(test, cluster1.ClusterName, cluster1.Name)).Should(WithTransform(
-		ConditionStatus(workloadv1alpha1.WorkloadClusterReadyCondition),
+	test.Eventually(WorkloadCluster(test, cluster1.ClusterName, cluster1.Name)).WithTimeout(time.Minute * 3).Should(WithTransform(
+		ConditionStatus(conditionsapi.ReadyCondition),
 		Equal(corev1.ConditionTrue),
 	))
 
@@ -77,22 +78,22 @@ func TestTLS(t *testing.T) {
 
 	name := "echo"
 
-	// Create the root Deployment
+	// Create the Deployment
 	_, err := test.Client().Core().Cluster(logicalcluster.From(namespace)).AppsV1().Deployments(namespace.Name).
-		Apply(test.Ctx(), deploymentConfiguration(namespace.Name, name), applyOptions)
+		Apply(test.Ctx(), DeploymentConfiguration(namespace.Name, name), ApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
-	// Create the root Service
+	// Create the Service
 	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Services(namespace.Name).
-		Apply(test.Ctx(), serviceConfiguration(namespace.Name, name, map[string]string{}), applyOptions)
+		Apply(test.Ctx(), ServiceConfiguration(namespace.Name, name, map[string]string{}), ApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
-	// Create the root Ingress
+	// Create the Ingress
 	_, err = test.Client().Core().Cluster(logicalcluster.From(namespace)).NetworkingV1().Ingresses(namespace.Name).
-		Apply(test.Ctx(), ingressConfiguration(namespace.Name, name), applyOptions)
+		Apply(test.Ctx(), IngressConfiguration(namespace.Name, name), ApplyOptions)
 	test.Expect(err).NotTo(HaveOccurred())
 
-	// Wait until the root Ingress is reconciled with the load balancer Ingresses
+	// Wait until the Ingress is reconciled with the load balancer Ingresses
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
 		WithTransform(Annotations, And(
 			HaveKey(kuadrantcluster.ANNOTATION_HCG_HOST),
@@ -106,6 +107,7 @@ func TestTLS(t *testing.T) {
 	ingress := GetIngress(test, namespace, name)
 	hostname := ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]
 	context, err := kuadrantcluster.NewControlObjectMapper(ingress)
+	test.Expect(err).NotTo(HaveOccurred())
 
 	// Check the Ingress TLS spec
 	test.Expect(ingress).To(WithTransform(IngressTLS, ConsistOf(

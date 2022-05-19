@@ -25,7 +25,6 @@ import (
 
 const (
 	issuerLabel          = "issuer"
-	hostnameLabel        = "hostname"
 	resultLabel          = "result"
 	resultLabelSucceeded = "succeeded"
 	// FIXME: Refactor TLS certificate management to be able to monitor errors
@@ -43,7 +42,6 @@ var (
 		},
 		[]string{
 			issuerLabel,
-			hostnameLabel,
 			resultLabel,
 		},
 	)
@@ -58,7 +56,6 @@ var (
 		// TODO: check if it's possible to add an error/code label
 		[]string{
 			issuerLabel,
-			hostnameLabel,
 		},
 	)
 
@@ -82,7 +79,6 @@ var (
 		},
 		[]string{
 			issuerLabel,
-			hostnameLabel,
 			resultLabel,
 		},
 	)
@@ -96,7 +92,6 @@ var (
 		},
 		[]string{
 			issuerLabel,
-			hostnameLabel,
 		},
 	)
 )
@@ -114,12 +109,10 @@ func init() {
 func InitMetrics(provider tls.Provider) {
 	// Initialize metrics
 	issuer := provider.IssuerID()
-	for _, domain := range provider.Domains() {
-		tlsCertificateRequestTotal.WithLabelValues(issuer, domain, resultLabelSucceeded).Add(0)
-		tlsCertificateRequestTotal.WithLabelValues(issuer, domain, resultLabelFailed).Add(0)
-		tlsCertificateRequestErrors.WithLabelValues(issuer, domain).Add(0)
-		tlsCertificateSecretCount.WithLabelValues(issuer, domain).Set(0)
-	}
+	tlsCertificateRequestTotal.WithLabelValues(issuer, resultLabelSucceeded).Add(0)
+	tlsCertificateRequestTotal.WithLabelValues(issuer, resultLabelFailed).Add(0)
+	tlsCertificateRequestErrors.WithLabelValues(issuer).Add(0)
+	tlsCertificateSecretCount.WithLabelValues(issuer).Set(0)
 
 	tls.InitMetrics(provider)
 }

@@ -23,18 +23,32 @@ The configuration can be modified after the initial deployment as required, see 
 
 ## Workload Cluster
 
-When registering a workload cluster with KCP, you need to ensure KCP has permissions to sync the resources you need. To do this you need to create a service account in your workload cluster and create the required cluster role. Then bind the cluster role to the service account. You can then create a kubeconfig and add it to your workload cluster
+To add a workload cluster to your kcp workspace you must use the [`kubectl kcp workload sync`](https://github.com/kcp-dev/kcp/blob/main/docs/syncer.md) command.
 
 ```
 # targeting your workload cluster run:
 
-kubectl create ns kcp-pcluster
-kubectl create sa kcp -n kcp-pcluster
-kubectl create -f config/kcp/kcp-syncer-role.yaml
-# note the script expects the ns to be kcp-pcluster
-./utils/workspace_cluster.sh > workload-cluster.yaml
+kubectl kcp workload sync <cluster name> --syncer-image=ghcr.io/kcp-dev/kcp/syncer:release-0.4 --resources=ingresses.networking.k8s.io,services > ./tmp/<cluster name>-syncer.
+yaml
+```
+
+This command will add a workload cluster and output kubernetes resources that should be applied to the physical cluster.
 
 ```
+# targeting your physical cluster run:
+
+kubectl apply -f ./tmp/<cluster name>-syncer
+```
+
+Check that the workload cluster has synced correctly and is now ready:
+```
+# targeting your workload cluster run:
+$ kubectl get workloadclusters -o wide
+NAME            LOCATION         READY   SYNCED API RESOURCES
+<cluster name>  <cluster name>   True
+```
+
+Note: `SYNCED API RESOURCES` is not expected to be populated [https://github.com/kcp-dev/kcp/issues/943](https://github.com/kcp-dev/kcp/issues/943).
 
 ## Local Development
 
@@ -180,8 +194,9 @@ $(kubectl --namespace default get secret/glbc-token-<id> -o jsonpath='{.data.tok
 You can now run GLBC targeting the KCP instance by passing this kubeconfig file as a start up parameter
 
 ```
--kubeconfig=<path to kcp kube config>
-
+--kubeconfig=<path to kcp kube config>
 ```
+
+Note: When targeting a remote KCP you may not have access to all workspaces. If that's the case you will need to start the controller with the logical cluster specified `--logical-cluster root:<my org>:<my workspace>`  
 
 

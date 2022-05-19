@@ -10,9 +10,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
 
-	"github.com/kuadrant/kcp-glbc/pkg/cluster"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
@@ -48,9 +46,8 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		AddFunc: func(obj interface{}) {
 			secret := obj.(*corev1.Secret)
 			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
-			hostname, hasHostname := secret.Annotations[cluster.ANNOTATION_HCG_HOST]
-			if hasIssuer && hasHostname {
-				tlsCertificateSecretCount.WithLabelValues(issuer, hostname).Inc()
+			if hasIssuer {
+				tlsCertificateSecretCount.WithLabelValues(issuer).Inc()
 			}
 			c.Enqueue(obj)
 		},
@@ -60,9 +57,8 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		DeleteFunc: func(obj interface{}) {
 			secret := obj.(*corev1.Secret)
 			issuer, hasIssuer := secret.Annotations[tlsIssuerAnnotation]
-			hostname, hasHostname := secret.Annotations[cluster.ANNOTATION_HCG_HOST]
-			if hasIssuer && hasHostname {
-				tlsCertificateSecretCount.WithLabelValues(issuer, hostname).Dec()
+			if hasIssuer {
+				tlsCertificateSecretCount.WithLabelValues(issuer).Dec()
 			}
 			c.Enqueue(obj)
 		},
@@ -72,25 +68,26 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {
-	obj, exists, err := c.glbcSecretInformer.Informer().GetIndexer().GetByKey(key)
+	secret, exists, err := c.glbcSecretInformer.Informer().GetIndexer().GetByKey(key)
 	if err != nil {
 		return err
 	}
 
 	if !exists {
-		klog.Infof("Object with key %q was deleted", key)
+		c.Logger.Info("Secret was deleted", "key", key)
 		return nil
 	}
-	current := obj.(*corev1.Secret)
 
+	current := secret.(*corev1.Secret)
 	previous := current.DeepCopy()
-	if err := c.reconcile(ctx, current); err != nil {
+	if err = c.reconcile(ctx, current); err != nil {
 		return err
 	}
-	// If the object being reconciled changed as a result, update it.
+
 	if !equality.Semantic.DeepEqual(previous, current) {
 		_, err := c.glbcKubeClient.CoreV1().Secrets(current.Namespace).Update(ctx, current, metav1.UpdateOptions{})
 		return err
 	}
+
 	return nil
 }

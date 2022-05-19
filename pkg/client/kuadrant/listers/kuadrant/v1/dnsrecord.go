@@ -3,8 +3,6 @@
 package v1
 
 import (
-	"context"
-
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -17,9 +15,6 @@ type DNSRecordLister interface {
 	// List lists all DNSRecords in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.DNSRecord, err error)
-	// ListWithContext lists all DNSRecords in the indexer.
-	// Objects returned here must be treated as read-only.
-	ListWithContext(ctx context.Context, selector labels.Selector) (ret []*v1.DNSRecord, err error)
 	// DNSRecords returns an object that can list and get DNSRecords.
 	DNSRecords(namespace string) DNSRecordNamespaceLister
 	DNSRecordListerExpansion
@@ -37,11 +32,6 @@ func NewDNSRecordLister(indexer cache.Indexer) DNSRecordLister {
 
 // List lists all DNSRecords in the indexer.
 func (s *dNSRecordLister) List(selector labels.Selector) (ret []*v1.DNSRecord, err error) {
-	return s.ListWithContext(context.Background(), selector)
-}
-
-// ListWithContext lists all DNSRecords in the indexer.
-func (s *dNSRecordLister) ListWithContext(ctx context.Context, selector labels.Selector) (ret []*v1.DNSRecord, err error) {
 	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1.DNSRecord))
 	})
@@ -74,11 +64,6 @@ type dNSRecordNamespaceLister struct {
 
 // List lists all DNSRecords in the indexer for a given namespace.
 func (s dNSRecordNamespaceLister) List(selector labels.Selector) (ret []*v1.DNSRecord, err error) {
-	return s.ListWithContext(context.Background(), selector)
-}
-
-// ListWithContext lists all DNSRecords in the indexer for a given namespace.
-func (s dNSRecordNamespaceLister) ListWithContext(ctx context.Context, selector labels.Selector) (ret []*v1.DNSRecord, err error) {
 	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1.DNSRecord))
 	})
@@ -87,11 +72,6 @@ func (s dNSRecordNamespaceLister) ListWithContext(ctx context.Context, selector 
 
 // Get retrieves the DNSRecord from the indexer for a given namespace and name.
 func (s dNSRecordNamespaceLister) Get(name string) (*v1.DNSRecord, error) {
-	return s.GetWithContext(context.Background(), name)
-}
-
-// GetWithContext retrieves the DNSRecord from the indexer for a given namespace and name.
-func (s dNSRecordNamespaceLister) GetWithContext(ctx context.Context, name string) (*v1.DNSRecord, error) {
 	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
 	if err != nil {
 		return nil, err

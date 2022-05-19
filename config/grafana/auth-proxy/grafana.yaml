@@ -12,13 +12,14 @@ spec:
     auth:
       disable_login_form: True
       disable_signout_menu: True
-    auth.basic:
-      enabled: False
     auth.proxy:
       enabled: True
       enable_login_token: True
       header_property: username
       header_name: X-Forwarded-User
+    security:
+      admin_user: "admin"
+      admin_password: "admin"
     users:
       viewers_can_edit: True
       auto_assign_org_role: Admin

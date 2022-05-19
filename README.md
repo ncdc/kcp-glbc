@@ -13,15 +13,12 @@ make local-setup
 This script will:
 
 - build all the binaries
-- deploy two kubernetes 1.18 clusters locally.
+- deploy two kubernetes 1.22 clusters locally using `kind`.
 - deploy and configure the ingress controllers in each cluster.
 - start the KCP server.
 
-Once the script is done, open a new terminal, and from the root of the project, you should start the ingress controller:
-
-```bash
-./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --glbc-kubeconfig ./tmp/kcp-cluster-glbc-control.kubeconfig
-```
+Once the script is done, copy the `Run locally:` command from the output.
+Open a new terminal, and from the root of the project, run the copied command.
 
 Now you can create a new ingress resource from the root of the project:
 
@@ -29,29 +26,17 @@ Now you can create a new ingress resource from the root of the project:
 export KUBECONFIG=.kcp/admin.kubeconfig
 kubectl create namespace default
 
-# Multi cluster
-kubectl apply -n default -f samples/echo-service-multi-cluster/echo.yaml
-kubectl apply -n default -f samples/echo-service-multi-cluster/ingress.yaml
-
-# single cluster
-kubectl apply -n default -f samples/echo-service-single-cluster/echo.yaml
-kubectl apply -n default -f samples/echo-service-single-cluster/ingress.yaml
+# Single cluster
+kubectl apply -n default -f samples/echo-service/echo.yaml
 ```
 
-If errors are encountered about resources not existing, sometimes deleting the clusters from KCP and recreating them can solve the problem:
+To verify the resources were created successfully, check the output of the following:
 
-Delete the clusters:
-```bash 
-KUBECONFIG=.kcp/admin.kubeconfig kubectl delete cluster kcp-cluster-1
-KUBECONFIG=.kcp/admin.kubeconfig kubectl delete cluster kcp-cluster-2
-```
-Recreate them:
 ```bash
-KUBECONFIG=.kcp/admin.kubeconfig kubectl apply -f ./tmp/kcp-cluster-1.yaml
-KUBECONFIG=.kcp/admin.kubeconfig kubectl apply -f ./tmp/kcp-cluster-2.yaml
+kubectl get deployment,service,ingress
 ```
 
-### Add CRC cluster
+### Add CRC cluster (optional)
 
 With a running local setup i.e. you have successfully executed `make local-setup`, you can run the following to create and add a CRC cluster:
 
@@ -60,7 +45,7 @@ With a running local setup i.e. you have successfully executed `make local-setup
 ```
 
 ```bash
-$ kubectl get clusters -o wide
+$ kubectl get workloadclusters -o wide
 NAME              LOCATION          READY   SYNCED API RESOURCES
 kcp-cluster-1     kcp-cluster-1     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
 kcp-cluster-2     kcp-cluster-2     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
@@ -71,6 +56,15 @@ You must have crc installed(https://crc.dev/crc/), and have your openshift pull 
 Please check the script comments for any version requirements.
 
 ## Development
+
+### Interacting directly with WorkloadClusters
+
+Prefix `kubectl` with the appropriate kubeconfig file from the tmp directory.
+For example:
+
+```bash
+KUBECONFIG=./tmp/kcp-cluster-1.kubeconfig kubectl get deployments,services,ingress --all-namespaces
+```
 
 ### Testing
 
@@ -101,67 +95,5 @@ This is done automatically as part of the `make local-setup` but will require pr
 
 N.B. This does not remove the requirement to have the DNS records created in a valid DNS service (e.g. route53 in AWS).
 
-## Overall diagram
-
-```
-                    ┌───────────────────────────────────────────────────────────────┐                                                                                                                            
-                    │ KCP                                                           │                                                                                                                            
-                    │              ┌────────────────────────┐                       │                                                                                                                            
-                    │              │                        │                       │                                          ┌───────────────────────────────┐                                                 
-                    │      ┌───────│ KCP-Ingress Controller │──────Creates──┐       │                                          │                               │                                                 
-                    │      │       │                        │               │       │                                          │            ┌────────────────┐ │                                                 
-                    │      │       └────────────────────────┘               │       │                                          │        ┌─▶ │  Leaf Ingress  │ │                                                 
-                    │      │                    │                           ▼       │         Sync Object and status           │        │   └────────────────┘ │                                                 
-                    │      │                    │              ┌────────────────────┴───┐                                      │        │                   ┌──┴───────┐                                         
-                    │      │                    ▼              │                        │                             ┌────────┴─────┐  │                   │          │                                         
-┌────────────────┐  │      │       ┌────────────────────────┐  │      Leaf Ingress      │◀───────────────────────────▶│    Syncer    │──┘ k8s cluster┌─────▶│ Gateway  │◀─────────┐                              
-│Ingress         │  │      │       │                        │  │                        │                             └────────┬─────┘               │      │          │          │                              
-│HTTPRoute       │──┼──────┼──────▶│      Root Ingress      │  ├────────────────────────┤                                      │                     │      └──┬───────┘          │                              
-│Route           │  │      │       │                        │  │                        │                                      │                     │         │                  │                              
-└────────────────┘  │      │       └────────────────────────┘  │      Leaf Ingress      │◀───────────────────┐                 │       ┌───────────────────────┴──┐               │                              
-                    │      │                    ▲              │                        │                    │                 │       │                          │               │                              
-                    │      │                    │              ├────────────────────────┤                    │                 │       │  gateway-api controller  │               │                              
-                    │   On Ready                │              │                        │                    │                 └───────┤                          │               │                              
-                    │   Creates                 │              │      Leaf Ingress      │◀──────────────┐    │                         └──────────────────────────┘               │                              
-                    │      │                    │              │                        │               │    │                 ┌────────────────────────────────┐                 │                              
-                    │      │                    │              └────────────────────┬───┘               │    │                 │              ┌────────────────┐│                 │                              
-                    │      │                    │                           │       │                   │    │                 │          ┌─▶ │  Leaf Ingress  ││                 │           ┌─────────────────┐
-                    │      │                    │                           │       │                   │    │          ┌──────┴───────┐  │   └────────────────┘│                 │           │                 │
-                    │      │                    └───────────────────────────┘       │                   │    └─────────▶│    Syncer    │──┘                     │                 │           │                 │
-                    │      │                              Merge Status              │                   │               └──────┬───────┘                    ┌───┴──────┐          │           │   Global load   │
-                    │      │                                                        │                   │                      │                            │          │          │           │    balancer     │
-                    │      │                                                        │                   │                      │          k8s cluster ┌────▶│ Gateway  │◀─────────┼───────────│                 │
-                    │      │  ┌────────────────────────┐                            │                   │                      │                      │     │          │          │           │   ALB/NLB...    │
-                    │      │  │                        │                            │                   │                      │                      │     └───┬──────┘          │           │                 │
-                    │      └─▶│ Global Ingress Object  │◀──┐                        │                   │                      │                      │         │                 │           │                 │
-                    │         │                        │   │                        │                   │                      │                      │         │                 │           └─────────────────┘
-                    │         └────────────────────────┘   │                        │                   │                      │        ┌───────────────────────┴──┐              │                    ▲         
-                    │                                      │                        │                   │                      │        │                          │              │                    │         
-                    │                                      │                        │                   │                      └────────┤  gateway-api controller  │              │                    │         
-                    │                        ┌──────────────────────────┐           │                   │                               │                          │              │                    │         
-                    │                        │   Global Load Balancer   │           │                   │                               └──────────────────────────┘              │                    │         
-                    └────────────────────────┤        Controller        ├───────────┘                   │                                                                         │                    │         
-                                             └──────────────────────────┘                               │                      ┌───────────────────────────────┐                  │                    │         
-                                                           │                                            │                      │             ┌────────────────┐│                  │                    │         
-                                                           │                                            │                      │          ┌─▶│  Leaf Ingress  ││                  │                    │         
-                                                           │                                            │               ┌──────┴───────┐  │  └────────────────┘│                  │                    │         
-                                                           │                                            └──────────────▶│    Syncer    │──┘                    │                  │                    │         
-                                                           │                                                            └──────┬───────┘                    ┌──┴───────┐          │                    │         
-                                                           │                                                                   │                            │          │          │                    │         
-                                                           │                                                                   │          k8s cluster  ┌───▶│ Gateway  │◀─────────┘                    │         
-                                                           │                                                                   │                       │    │          │                               │         
-                                                           │                                                                   │                       │    └──┬───────┘                               │         
-                                                           │                                                                   │                       │       │                                       │         
-                                                           │                                                                   │                       │       │                                       │         
-                                                           │                                                                   │         ┌─────────────────────┴────┐                                  │         
-                                                           │                                                                   │         │                          │                                  │         
-                                                           │                                                                   └─────────┤  gateway-api controller  │                                  │         
-                                                           │                                                                             │                          │                                  │         
-                              ┌──────────────────┐         │                                                                             └──────────────────────────┘                                  │         
-                              │                  │         │                                                                                                                                           │         
-                              │                  │         │                                                                                                                                           │         
-                              │       DNS        │◀────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘         
-                              │                  │                                                                                                                                                               
-                              │                  │                                                                                                                                                               
-                              └──────────────────┘                                                                                                                                                               
+                                                                                                                                                     
 ```

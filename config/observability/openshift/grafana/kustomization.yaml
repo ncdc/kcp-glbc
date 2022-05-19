@@ -5,3 +5,4 @@ resources:
   - ../../../grafana/operator
   - ../../../grafana/auth-proxy
   - prometheus-grafanadatasource.yaml
+  - ../../grafana/dashboards

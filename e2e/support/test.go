@@ -11,7 +11,6 @@ import (
 	"github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
@@ -32,7 +31,7 @@ type Test interface {
 }
 
 type Option interface {
-	applyTo(metav1.Object) error
+	applyTo(interface{}) error
 }
 
 func With(t *testing.T) Test {

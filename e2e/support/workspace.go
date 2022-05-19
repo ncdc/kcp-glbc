@@ -4,6 +4,8 @@
 package support
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/onsi/gomega"
 
@@ -23,9 +25,22 @@ type inWorkspace struct {
 	workspace *tenancyv1alpha1.ClusterWorkspace
 }
 
-func (o *inWorkspace) applyTo(object metav1.Object) error {
-	clusterName := logicalcluster.From(o.workspace).Join(o.workspace.Name).String()
-	object.SetClusterName(clusterName)
+var _ Option = &inWorkspace{}
+
+func (o *inWorkspace) applyTo(to interface{}) error {
+	logicalCluster := logicalcluster.From(o.workspace).Join(o.workspace.Name)
+
+	switch obj := to.(type) {
+	case metav1.Object:
+		obj.SetClusterName(logicalCluster.String())
+
+	case *workloadClusterConfig:
+		obj.workspace = o.workspace
+
+	default:
+		return fmt.Errorf("cannot apply InWorkspace option to %q", to)
+	}
+
 	return nil
 }
 
@@ -66,8 +81,6 @@ func Workspace(t Test, name string) func() *tenancyv1alpha1.ClusterWorkspace {
 
 func createTestWorkspace(t Test) *tenancyv1alpha1.ClusterWorkspace {
 	name := "test-" + uuid.New().String()
-	// FIXME: To be removed when https://github.com/kcp-dev/kcp/pull/834 is available
-	name = name[:31]
 
 	workspace := &tenancyv1alpha1.ClusterWorkspace{
 		TypeMeta: metav1.TypeMeta{

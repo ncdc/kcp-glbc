@@ -143,18 +143,18 @@ The metrics can then be retrieved by _GETTing_ the `/metrics` endpoint, e.g.:
 $ curl http://localhost:8888/metrics | grep "glbc_tls"
 # HELP glbc_tls_certificate_issuance_duration_seconds GLBC TLS certificate issuance duration
 # TYPE glbc_tls_certificate_issuance_duration_seconds histogram
-glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="",result="succeeded",le="1"} 0
-glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="",result="succeeded",le="5"} 0
-glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="",result="succeeded",le="10"} 0
-glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="",result="succeeded",le="15"} 0
-glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="",result="succeeded",le="30"} 0
-glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="",result="succeeded",le="45"} 0
-glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="",result="succeeded",le="60"} 0
-glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="",result="succeeded",le="120"} 1
-glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="",result="succeeded",le="300"} 1
-glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="",result="succeeded",le="+Inf"} 1
-glbc_tls_certificate_issuance_duration_seconds_sum{issuer="",result="succeeded"} 93
-glbc_tls_certificate_issuance_duration_seconds_count{issuer="",result="succeeded"} 1
+glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="letsencryptstaging",result="succeeded",le="1"} 0
+glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="letsencryptstaging",result="succeeded",le="5"} 0
+glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="letsencryptstaging",result="succeeded",le="10"} 0
+glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="letsencryptstaging",result="succeeded",le="15"} 0
+glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="letsencryptstaging",result="succeeded",le="30"} 0
+glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="letsencryptstaging",result="succeeded",le="45"} 0
+glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="letsencryptstaging",result="succeeded",le="60"} 0
+glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="letsencryptstaging",result="succeeded",le="120"} 1
+glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="letsencryptstaging",result="succeeded",le="300"} 1
+glbc_tls_certificate_issuance_duration_seconds_bucket{issuer="letsencryptstaging",result="succeeded",le="+Inf"} 1
+glbc_tls_certificate_issuance_duration_seconds_sum{issuer="letsencryptstaging",result="succeeded"} 93
+glbc_tls_certificate_issuance_duration_seconds_count{issuer="letsencryptstaging",result="succeeded"} 1
 # HELP glbc_tls_certificate_pending_request_count GLBC TLS certificate pending request count
 # TYPE glbc_tls_certificate_pending_request_count gauge
 glbc_tls_certificate_pending_request_count{issuer="letsencryptstaging"} 0
@@ -216,7 +216,7 @@ The KCP GLBC monitoring endpoint exposes the metrics listed in the following sec
 | `glbc_tls_certificate_secret_count`
 | `GaugeVec`
 | Current number of TLS certificate Secrets
-| `issuer`, `hostname`
+| `issuer`
 
 | `glbc_tls_certificate_pending_request_count`
 | `GaugeVec`
@@ -226,17 +226,17 @@ The KCP GLBC monitoring endpoint exposes the metrics listed in the following sec
 | `glbc_tls_certificate_request_total`
 | `CounterVec`
 | Total number of TLS certificate requests
-| `issuer`, `hostname`, `result`
+| `issuer`, `result`
 
 | `glbc_tls_certificate_request_errors_total`
 | `CounterVec`
 | Total number of failed TLS certificate requests
-| `issuer`, `hostname`
+| `issuer`
 
 | `glbc_tls_certificate_issuance_duration_seconds`
 | `HistogramVec`
 | Duration of the TLS certificate issuance
-| `issuer`, `hostname`, `result`
+| `issuer`, `result`
 
 |===
 

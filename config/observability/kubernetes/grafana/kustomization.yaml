@@ -6,3 +6,4 @@ resources:
   - ../../../grafana
   - ingress.yaml
   - prometheus-grafanadatasource.yaml
+  - ../../grafana/dashboards

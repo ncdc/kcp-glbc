@@ -15,12 +15,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e
+package support
 
 import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	appsv1apply "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1apply "k8s.io/client-go/applyconfigurations/core/v1"
@@ -28,9 +27,7 @@ import (
 	networkingv1apply "k8s.io/client-go/applyconfigurations/networking/v1"
 )
 
-var applyOptions = metav1.ApplyOptions{FieldManager: "kcp-glbc-e2e", Force: true}
-
-func ingressConfiguration(namespace, name string) *networkingv1apply.IngressApplyConfiguration {
+func IngressConfiguration(namespace, name string) *networkingv1apply.IngressApplyConfiguration {
 	return networkingv1apply.Ingress(name, namespace).WithSpec(
 		networkingv1apply.IngressSpec().WithRules(networkingv1apply.IngressRule().
 			WithHost("test.gblb.com").
@@ -45,7 +42,7 @@ func ingressConfiguration(namespace, name string) *networkingv1apply.IngressAppl
 								WithName("http"))))))))
 }
 
-func deploymentConfiguration(namespace, name string) *appsv1apply.DeploymentApplyConfiguration {
+func DeploymentConfiguration(namespace, name string) *appsv1apply.DeploymentApplyConfiguration {
 	return appsv1apply.Deployment(name, namespace).
 		WithSpec(appsv1apply.DeploymentSpec().
 			WithSelector(v1apply.LabelSelector().WithMatchLabels(map[string]string{"app": name})).
@@ -61,7 +58,7 @@ func deploymentConfiguration(namespace, name string) *appsv1apply.DeploymentAppl
 							WithProtocol(corev1.ProtocolTCP))))))
 }
 
-func serviceConfiguration(namespace, name string, annotations map[string]string) *corev1apply.ServiceApplyConfiguration {
+func ServiceConfiguration(namespace, name string, annotations map[string]string) *corev1apply.ServiceApplyConfiguration {
 	return corev1apply.Service(name, namespace).
 		WithAnnotations(annotations).
 		WithSpec(corev1apply.ServiceSpec().

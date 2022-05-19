@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	issuerLabel = "issuer"
-	hostLabel   = "host"
+	issuerLabel   = "issuer"
+	hostnameLabel = "hostname"
 )
 
 var (
@@ -36,7 +36,7 @@ var (
 		},
 		[]string{
 			issuerLabel,
-			hostLabel,
+			hostnameLabel,
 		},
 	)
 )

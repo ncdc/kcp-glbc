@@ -1,0 +1,474 @@
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDashboard
+metadata:
+  name: glbc-dashboard
+  labels:
+    app: grafana
+spec:
+  json: >
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": "-- Grafana --",
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "gnetId": null,
+      "graphTooltip": 1,
+      "id": 2,
+      "iteration": 1652876738193,
+      "links": [],
+      "panels": [
+        {
+          "datasource": null,
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "green",
+                "mode": "fixed"
+              },
+              "decimals": 0,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 0
+          },
+          "id": 2,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "text": {},
+            "textMode": "auto"
+          },
+          "pluginVersion": "7.5.15",
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(increase(glbc_aws_route53_request_total{namespace=\"$namespace\"}[$__range]))",
+              "format": "time_series",
+              "hide": false,
+              "instant": true,
+              "interval": "",
+              "legendFormat": "Total Requests",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(increase(glbc_aws_route53_request_errors_total{namespace=\"$namespace\"}[$__range]))",
+              "hide": false,
+              "instant": true,
+              "interval": "",
+              "legendFormat": "Total Errors",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "AWS Route53 Requests",
+          "type": "stat"
+        },
+        {
+          "datasource": null,
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "green",
+                "mode": "fixed"
+              },
+              "decimals": 0,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 0
+          },
+          "id": 7,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "text": {},
+            "textMode": "auto"
+          },
+          "pluginVersion": "7.5.15",
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(increase(glbc_tls_certificate_request_total{namespace=\"$namespace\",result=\"failed\"}[$__range])) by (issuer)",
+              "format": "time_series",
+              "hide": false,
+              "instant": true,
+              "interval": "",
+              "legendFormat": "Total  {{issuer}}",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(increase(glbc_tls_certificate_request_total{namespace=\"$namespace\", result=\"succeeded\"}[$__range])) by(issuer)",
+              "hide": false,
+              "instant": true,
+              "interval": "",
+              "legendFormat": "Total Succeeded {{issuer}}",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(increase(glbc_tls_certificate_request_total{namespace=\"$namespace\", result=\"failed\"}[$__range])) by (issuer)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "Total Failed {{issuer}}",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(increase(glbc_tls_certificate_secret_count{namespace=\"$namespace\" }[$__range])) by (issuer)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "Total Secrets {{issuer}}",
+              "refId": "D"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(increase(glbc_tls_certificate_pending_request_count{namespace=\"$namespace\"}[$__range])) by (issuer)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "Total Pending {{issuer}}",
+              "refId": "E"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(increase(glbc_tls_certificate_issuance_duration_seconds_bucket{namespace=\"$namespace\"}[$__range])) by (issuer) - sum(increase(glbc_tls_certificate_issuance_duration_seconds_bucket{namespace=\"$namespace\" , le=\"300\"}[$__range]))  by (issuer)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "Total > 5m {{issuer}}",
+              "refId": "F"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "TLS Cert Requests",
+          "type": "stat"
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": null,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 9
+          },
+          "hiddenSeries": false,
+          "id": 4,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.15",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "kube_pod_container_resource_requests{namespace=\"$namespace\", resource=\"memory\"}",
+              "interval": "",
+              "legendFormat": "Pod Memory Requests",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "kube_pod_container_resource_limits{namespace=\"$namespace\", resource=\"memory\"}",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "Pod Memory Limits",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "container_memory_rss{namespace=\"$namespace\", container=\"manager\"}  ",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "Container Memory",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Memory",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": null,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 9
+          },
+          "hiddenSeries": false,
+          "id": 6,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.15",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "kube_pod_container_resource_limits{namespace=\"$namespace\", resource=\"cpu\"}",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "CPU Limits",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "kube_pod_container_resource_requests{namespace=\"$namespace\", resource=\"cpu\"}",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "CPU Requests",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\"}[1m])) by (pod)",
+              "interval": "",
+              "legendFormat": "CPU Load {{pod}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "CPU",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        }
+      ],
+      "refresh": "5s",
+      "schemaVersion": 27,
+      "style": "dark",
+      "tags": [],
+      "templating": {
+        "list": [
+          {
+            "allValue": null,
+            "current": {},
+            "datasource": null,
+            "definition": "label_values(namespace)",
+            "description": null,
+            "error": null,
+            "hide": 0,
+            "includeAll": false,
+            "label": "Namespace",
+            "multi": false,
+            "name": "namespace",
+            "options": [],
+            "query": {
+              "query": "label_values(namespace)",
+              "refId": "StandardVariableQuery"
+            },
+            "refresh": 1,
+            "regex": "/^kcp-glbc.*/",
+            "skipUrlSync": false,
+            "sort": 0,
+            "tagValuesQuery": "",
+            "tags": [],
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+          }
+        ]
+      },
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "timepicker": {
+        "refresh_intervals": [],
+        "time_options": []
+      },
+      "timezone": "browser",
+      "title": "GLBC",
+      "uid": "75f3d9c692690c6badc848e02a3d6e1b82444622",
+      "version": 6
+    }
