@@ -3,7 +3,7 @@ SHELL := /usr/bin/env bash
 
 NUM_CLUSTERS := 2
 DO_BREW := true
-KCP_BRANCH := v0.4.0-alpha.0
+KCP_BRANCH := main
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
 IMAGE_TAG ?= latest
@@ -177,7 +177,7 @@ KIND_VERSION ?= v0.11.1
 kcp: $(KCP) ## Download kcp locally if necessary.
 $(KCP):
 	rm -rf ./tmp/kcp
-	git clone --depth=1 --branch ${KCP_BRANCH} https://github.com/kcp-dev/kcp ./tmp/kcp
+	git clone --depth=1 --branch sttts-placement-namespace https://github.com/sttts/kcp ./tmp/kcp
 	cd ./tmp/kcp && make
 	cp ./tmp/kcp/bin/* $(LOCALBIN)
 	rm -rf ./tmp/kcp
