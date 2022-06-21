@@ -157,13 +157,14 @@ func (cm *certManager) Create(ctx context.Context, cr CertificateRequest) error 
 		return err
 	}
 	// TODO: Move to Certificate informer add handler
-	CertificateRequestCount.WithLabelValues(cm.IssuerID(), cr.Host()).Inc()
+	CertificateRequestCount.WithLabelValues(cm.IssuerID()).Inc()
 	return nil
 }
 
 func (cm *certManager) Delete(ctx context.Context, cr CertificateRequest) error {
 	// delete the certificate and delete the secrets
 	certNotFound := false
+
 	if err := cm.certClient.Certificates(cm.certificateNS).Delete(ctx, cr.Name(), metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
@@ -178,7 +179,7 @@ func (cm *certManager) Delete(ctx context.Context, cr CertificateRequest) error 
 			// The Secret does not exist, which indicates the TLS certificate request is still pending,
 			// so we must account for decreasing the number of pending requests.
 			// TODO: Move to Certificate informer delete handler
-			CertificateRequestCount.WithLabelValues(cm.IssuerID(), cr.Host()).Dec()
+			CertificateRequestCount.WithLabelValues(cm.IssuerID()).Dec()
 		}
 	}
 	return nil

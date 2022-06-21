@@ -1,5 +1,18 @@
 //go:build e2e
-// +build e2e
+
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package support
 
@@ -13,10 +26,11 @@ import (
 
 	"github.com/onsi/gomega"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -26,10 +40,9 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
-	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
 	workloadv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	workloadplugin "github.com/kcp-dev/kcp/pkg/cliplugins/workload/plugin"
+	"github.com/kcp-dev/logicalcluster"
 )
 
 var (
@@ -78,7 +91,7 @@ func (o *withKubeConfigByID) applyTo(to interface{}) error {
 func Syncer() *syncer {
 	return &syncer{
 		// TODO: allow this to be set based on the KCP version exported by default
-		image:     "ghcr.io/kcp-dev/kcp/syncer:release-0.4",
+		image:     "ghcr.io/kcp-dev/kcp/syncer:cc96f19",
 		namespace: "default",
 		replicas:  1,
 	}
@@ -114,7 +127,7 @@ func (s *syncer) ResourcesToSync(resourcesToSync ...string) *syncer {
 func (s *syncer) applyTo(to interface{}) error {
 	config, ok := to.(*workloadClusterConfig)
 	if !ok {
-		return fmt.Errorf("cannot apply WithKubeConfigByName to %q", to)
+		return fmt.Errorf("cannot apply WithKubeConfigByName option to %q", to)
 	}
 	config.syncer = *s
 	return nil
@@ -123,11 +136,11 @@ func (s *syncer) applyTo(to interface{}) error {
 type workloadClusterConfig struct {
 	name           string
 	kubeConfigPath string
-	workspace      *tenancyv1alpha1.ClusterWorkspace
+	workspace      logicalcluster.Name
 	syncer         syncer
 }
 
-func createWorkloadCluster(t Test, name string, options ...Option) *workloadv1alpha1.WorkloadCluster {
+func createWorkloadCluster(t Test, name string, options ...Option) (*workloadv1alpha1.WorkloadCluster, func() error) {
 	config := &workloadClusterConfig{
 		name: name,
 	}
@@ -136,30 +149,39 @@ func createWorkloadCluster(t Test, name string, options ...Option) *workloadv1al
 		t.Expect(option.applyTo(config)).To(gomega.Succeed())
 	}
 
-	t.Expect(config.workspace).NotTo(gomega.BeNil())
+	t.Expect(config.workspace.Empty()).NotTo(gomega.BeTrue())
 	t.Expect(config.kubeConfigPath).NotTo(gomega.BeEmpty())
 
 	// Run the KCP workload plugin sync command
-	err := applyKcpWorkloadSync(t, config)
+	cleanup, err := applyKcpWorkloadSync(t, config)
 	t.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// Get the workload cluster and return it
-	workloadCluster, err := t.Client().Kcp().Cluster(logicalcluster.From(config.workspace).Join(config.workspace.Name)).WorkloadV1alpha1().WorkloadClusters().Get(t.Ctx(), name, metav1.GetOptions{})
+	workloadCluster, err := t.Client().Kcp().Cluster(config.workspace).WorkloadV1alpha1().WorkloadClusters().Get(t.Ctx(), name, metav1.GetOptions{})
 	t.Expect(err).NotTo(gomega.HaveOccurred())
 
-	return workloadCluster
+	return workloadCluster, cleanup
 }
 
-func applyKcpWorkloadSync(t Test, config *workloadClusterConfig) error {
+func deleteWorkloadCluster(t Test, workloadCluster *workloadv1alpha1.WorkloadCluster) {
+	// It's not possible to use foreground propagation policy as kcp doesn't currently support
+	// garbage collection.
+	propagationPolicy := metav1.DeletePropagationBackground
+	err := t.Client().Kcp().Cluster(logicalcluster.From(workloadCluster)).WorkloadV1alpha1().WorkloadClusters().Delete(t.Ctx(), workloadCluster.Name, metav1.DeleteOptions{PropagationPolicy: &propagationPolicy})
+	t.Expect(err).NotTo(gomega.HaveOccurred())
+}
+
+func applyKcpWorkloadSync(t Test, config *workloadClusterConfig) (func() error, error) {
+	cleanup := func() error { return nil }
+
 	// Configure workload plugin kubeconfig for test workspace
-	logicalClusterName := logicalcluster.From(config.workspace).Join(config.workspace.Name).String()
-	clusterServer := fmt.Sprintf("%s/clusters/%s", t.Client().GetConfig().Host, logicalClusterName)
+	clusterServer := t.Client().GetConfig().Host + config.workspace.Path()
 	syncCommandOutput := new(bytes.Buffer)
 	opts := workloadplugin.NewOptions(genericclioptions.IOStreams{In: os.Stdin, Out: syncCommandOutput, ErrOut: os.Stderr})
 	opts.KubectlOverrides.ClusterInfo.Server = clusterServer
 	plugin, err := workloadplugin.NewConfig(opts)
 	if err != nil {
-		return err
+		return cleanup, err
 	}
 
 	// Run workload plugin sync command
@@ -168,7 +190,7 @@ func applyKcpWorkloadSync(t Test, config *workloadClusterConfig) error {
 	resourcesToSync := userResourcesToSync.Union(requiredResourcesToSync).List()
 	err = plugin.Sync(t.Ctx(), config.name, config.syncer.namespace, config.syncer.image, resourcesToSync, config.syncer.replicas)
 	if err != nil {
-		return err
+		return cleanup, err
 	}
 
 	// Apply the syncer resources to the workload cluster
@@ -176,22 +198,43 @@ func applyKcpWorkloadSync(t Test, config *workloadClusterConfig) error {
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: config.kubeConfigPath},
 		&clientcmd.ConfigOverrides{}).ClientConfig()
 	if err != nil {
-		return err
+		return cleanup, err
 	}
 
 	client, err := dynamic.NewForConfig(clientConfig)
 	if err != nil {
-		return err
+		return cleanup, err
 	}
 
 	discoClient, err := discovery.NewDiscoveryClientForConfig(clientConfig)
 	if err != nil {
-		return err
+		return cleanup, err
 	}
 	cachedDiscoClient := memory.NewMemCacheClient(discoClient)
 	restMapper := restmapper.NewDeferredDiscoveryRESTMapper(cachedDiscoClient)
 
 	decoder := yaml.NewYAMLToJSONDecoder(bytes.NewReader(syncCommandOutput.Bytes()))
+
+	var resources []*unstructured.Unstructured
+
+	cleanup = func() error {
+		errs := make([]error, 0)
+		// Iterate over the resources in reverse order
+		for i := len(resources) - 1; i >= 0; i-- {
+			resource := resources[i]
+			mapping, err := restMapper.RESTMapping(resource.GroupVersionKind().GroupKind(), resource.GroupVersionKind().Version)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			propagationPolicy := metav1.DeletePropagationForeground
+			err = client.Resource(mapping.Resource).Namespace(resource.GetNamespace()).Delete(t.Ctx(), resource.GetName(), metav1.DeleteOptions{PropagationPolicy: &propagationPolicy})
+			if err != nil && !apierrors.IsNotFound(err) {
+				errs = append(errs, err)
+			}
+		}
+		return errors.NewAggregate(errs)
+	}
 
 	for {
 		resource := &unstructured.Unstructured{}
@@ -200,29 +243,24 @@ func applyKcpWorkloadSync(t Test, config *workloadClusterConfig) error {
 			break
 		}
 		if err != nil {
-			return err
+			return cleanup, err
 		}
 		mapping, err := restMapper.RESTMapping(resource.GroupVersionKind().GroupKind(), resource.GroupVersionKind().Version)
 		if err != nil {
-			return err
+			return cleanup, err
 		}
-		_, err = client.Resource(mapping.Resource).Namespace(resource.GetNamespace()).Create(t.Ctx(), resource, metav1.CreateOptions{})
+		data, err := json.Marshal(resource)
 		if err != nil {
-			if !errors.IsAlreadyExists(err) {
-				return err
-			}
-			data, err := json.Marshal(resource)
-			if err != nil {
-				return err
-			}
-			_, err = client.Resource(mapping.Resource).Namespace(resource.GetNamespace()).Patch(t.Ctx(), resource.GetName(), types.ApplyPatchType, data, ApplyOptions.ToPatchOptions())
-			if err != nil {
-				return err
-			}
+			return cleanup, err
 		}
+		_, err = client.Resource(mapping.Resource).Namespace(resource.GetNamespace()).Patch(t.Ctx(), resource.GetName(), types.ApplyPatchType, data, ApplyOptions.ToPatchOptions())
+		if err != nil {
+			return cleanup, err
+		}
+		resources = append(resources, resource)
 	}
 
-	return nil
+	return cleanup, nil
 }
 
 func WorkloadCluster(t Test, workspace, name string) func(g gomega.Gomega) *workloadv1alpha1.WorkloadCluster {

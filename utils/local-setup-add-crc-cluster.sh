@@ -36,9 +36,11 @@
 # "v1.22.7"
 # $ kubectl get workloadclusters -o wide
 # NAME              LOCATION          READY   SYNCED API RESOURCES
-# kcp-cluster-1     kcp-cluster-1     True
-# kcp-cluster-2     kcp-cluster-2     True
+# glbc              glbc              True
 # kcp-cluster-crc   kcp-cluster-crc   True
+# kubectl get locations
+# NAME         RESOURCE           AVAILABLE   INSTANCES   LABELS
+# location-1   workloadclusters   2           2
 
 set -e pipefail
 
@@ -49,7 +51,7 @@ PULL_SECRET=~/pull-secret
 
 KUBECTL_KCP_BIN="./bin/kubectl-kcp"
 
-: ${KCP_VERSION:="release-0.4"}
+: ${KCP_VERSION:="release-0.5"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 
 crc config set enable-cluster-monitoring true
@@ -60,8 +62,6 @@ cp ~/.crc/machines/crc/kubeconfig ${TEMP_DIR}/${CRC_KUBECONFIG}
 cp ${TEMP_DIR}/${CRC_KUBECONFIG} ${TEMP_DIR}/${CRC_KUBECONFIG}.internal
 
 echo "Registering crc cluster into KCP"
-KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workload sync ${CRC_CLUSTER_NAME} --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services > ${TEMP_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
+KUBECONFIG=config/deploy/local/kcp.kubeconfig ./bin/kubectl-kcp workspace use root:default:kcp-glbc-compute
+KUBECONFIG=config/deploy/local/kcp.kubeconfig ${KUBECTL_KCP_BIN} workload sync ${CRC_CLUSTER_NAME} --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services > ${TEMP_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
 kubectl --context crc-admin apply -f ${TEMP_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
-
-echo "Enabling monitoring"
-kubectl --context crc-admin -n openshift-monitoring apply -f config/observability/openshift/grafana/cluster-monitoring-config.yaml

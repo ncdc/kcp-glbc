@@ -1,0 +1,100 @@
+
+////
+THIS CONTENT IS GENERATED FROM THE FOLLOWING FILES:
+- Prometheus metrics file path tmp/metrics.pef
+- Tables config file path utils/prometheus_format_tables.csv
+Each row in the tables config file results in a new metrics table
+where the 1st column is the metrics name prefix to match on (e.g. go_)
+and the 2nd column is the table title (e.g. "Go Runtime Metrics")
+////
+.AWS Route53 metrics
+|===
+|Name |Help |Type |Labels
+| `glbc_aws_route53_inflight_request_count` | GLBC AWS Route53 inflight request count| GAUGE| `operation` 
+| `glbc_aws_route53_request_errors_total` | GLBC AWS Route53 total number of errors| COUNTER| `code` `operation` 
+| `glbc_aws_route53_request_total` | GLBC AWS Route53 total number of requests| COUNTER| `code` `operation` 
+|===
+.Reconcilation metrics
+|===
+|Name |Help |Type |Labels
+| `glbc_controller_active_workers` | Number of currently used workers per controller| GAUGE| `controller` 
+| `glbc_controller_max_concurrent_reconciles` | Maximum number of concurrent reconciles per controller| GAUGE| `controller` 
+| `glbc_controller_reconcile_errors_total` | Total number of reconciliation errors per controller| COUNTER| `controller` 
+| `glbc_controller_reconcile_time_seconds` | Length of time per reconciliation per controller| HISTOGRAM| `controller` 
+| `glbc_controller_reconcile_total` | Total number of reconciliations per controller| COUNTER| `controller` `result` 
+|===
+.Ingress object metrics
+|===
+|Name |Help |Type |Labels
+| `glbc_ingress_managed_object_time_to_admission` | Duration of the ingress object admission| HISTOGRAM| 
+| `glbc_ingress_managed_object_total` | Total number of managed ingress object| GAUGE| 
+|===
+.TLS certificate metrics
+|===
+|Name |Help |Type |Labels
+| `glbc_tls_certificate_issuance_duration_seconds` | GLBC TLS certificate issuance duration| HISTOGRAM| `issuer` `result` 
+| `glbc_tls_certificate_pending_request_count` | GLBC TLS certificate pending request count| GAUGE| `issuer` 
+| `glbc_tls_certificate_request_errors_total` | GLBC TLS certificate total number of request errors| COUNTER| `issuer` 
+| `glbc_tls_certificate_request_total` | GLBC TLS certificate total number of requests| COUNTER| `issuer` `result` 
+| `glbc_tls_certificate_secret_count` | GLBC TLS certificate secret count| GAUGE| `issuer` 
+|===
+.Workqueue metrics
+|===
+|Name |Help |Type |Labels
+| `workqueue_adds_total` | Total number of adds handled by workqueue| COUNTER| `name` 
+| `workqueue_depth` | Current depth of workqueue| GAUGE| `name` 
+| `workqueue_longest_running_processor_seconds` | How many seconds has the longest running processor for workqueue been running.| GAUGE| `name` 
+| `workqueue_queue_duration_seconds` | How long in seconds an item stays in workqueue before being requested| HISTOGRAM| `name` 
+| `workqueue_retries_total` | Total number of retries handled by workqueue| COUNTER| `name` 
+| `workqueue_unfinished_work_seconds` | How many seconds of work has been done that is in progress and hasn't been observed by work_duration. Large values indicate stuck threads. One can deduce the number of stuck threads by observing the rate at which this increases.| GAUGE| `name` 
+| `workqueue_work_duration_seconds` | How long in seconds processing an item from workqueue takes.| HISTOGRAM| `name` 
+|===
+.client-go REST API Call metrics
+|===
+|Name |Help |Type |Labels
+| `rest_client_request_latency_seconds` | Request latency in seconds. Broken down by verb.| HISTOGRAM| `verb` 
+| `rest_client_requests_total` | Number of HTTP requests, partitioned by status code, method, and host.| COUNTER| `code` `host` `method` 
+|===
+.Go Runtime metrics
+|===
+|Name |Help |Type |Labels
+| `go_gc_duration_seconds` | A summary of the pause duration of garbage collection cycles.| SUMMARY| 
+| `go_goroutines` | Number of goroutines that currently exist.| GAUGE| 
+| `go_info` | Information about the Go environment.| GAUGE| `version` 
+| `go_memstats_alloc_bytes` | Number of bytes allocated and still in use.| GAUGE| 
+| `go_memstats_alloc_bytes_total` | Total number of bytes allocated, even if freed.| COUNTER| 
+| `go_memstats_buck_hash_sys_bytes` | Number of bytes used by the profiling bucket hash table.| GAUGE| 
+| `go_memstats_frees_total` | Total number of frees.| COUNTER| 
+| `go_memstats_gc_cpu_fraction` | The fraction of this program's available CPU time used by the GC since the program started.| GAUGE| 
+| `go_memstats_gc_sys_bytes` | Number of bytes used for garbage collection system metadata.| GAUGE| 
+| `go_memstats_heap_alloc_bytes` | Number of heap bytes allocated and still in use.| GAUGE| 
+| `go_memstats_heap_idle_bytes` | Number of heap bytes waiting to be used.| GAUGE| 
+| `go_memstats_heap_inuse_bytes` | Number of heap bytes that are in use.| GAUGE| 
+| `go_memstats_heap_objects` | Number of allocated objects.| GAUGE| 
+| `go_memstats_heap_released_bytes` | Number of heap bytes released to OS.| GAUGE| 
+| `go_memstats_heap_sys_bytes` | Number of heap bytes obtained from system.| GAUGE| 
+| `go_memstats_last_gc_time_seconds` | Number of seconds since 1970 of last garbage collection.| GAUGE| 
+| `go_memstats_lookups_total` | Total number of pointer lookups.| COUNTER| 
+| `go_memstats_mallocs_total` | Total number of mallocs.| COUNTER| 
+| `go_memstats_mcache_inuse_bytes` | Number of bytes in use by mcache structures.| GAUGE| 
+| `go_memstats_mcache_sys_bytes` | Number of bytes used for mcache structures obtained from system.| GAUGE| 
+| `go_memstats_mspan_inuse_bytes` | Number of bytes in use by mspan structures.| GAUGE| 
+| `go_memstats_mspan_sys_bytes` | Number of bytes used for mspan structures obtained from system.| GAUGE| 
+| `go_memstats_next_gc_bytes` | Number of heap bytes when next garbage collection will take place.| GAUGE| 
+| `go_memstats_other_sys_bytes` | Number of bytes used for other system allocations.| GAUGE| 
+| `go_memstats_stack_inuse_bytes` | Number of bytes in use by the stack allocator.| GAUGE| 
+| `go_memstats_stack_sys_bytes` | Number of bytes obtained from system for stack allocator.| GAUGE| 
+| `go_memstats_sys_bytes` | Number of bytes obtained from system.| GAUGE| 
+| `go_threads` | Number of OS threads created.| GAUGE| 
+|===
+.Process metrics
+|===
+|Name |Help |Type |Labels
+| `process_cpu_seconds_total` | Total user and system CPU time spent in seconds.| COUNTER| 
+| `process_max_fds` | Maximum number of open file descriptors.| GAUGE| 
+| `process_open_fds` | Number of open file descriptors.| GAUGE| 
+| `process_resident_memory_bytes` | Resident memory size in bytes.| GAUGE| 
+| `process_start_time_seconds` | Start time of the process since unix epoch in seconds.| GAUGE| 
+| `process_virtual_memory_bytes` | Virtual memory size in bytes.| GAUGE| 
+| `process_virtual_memory_max_bytes` | Maximum amount of virtual memory available in bytes.| GAUGE| 
+|===

@@ -3,7 +3,7 @@ SHELL := /usr/bin/env bash
 
 NUM_CLUSTERS := 2
 DO_BREW := true
-KCP_BRANCH := v0.4.0-alpha.0
+KCP_BRANCH := release-0.5
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
 IMAGE_TAG ?= latest
@@ -67,8 +67,9 @@ test: generate ## Run tests.
 
 .PHONY: e2e
 e2e: build
-	## Run the metrics test first, so it's start from a clean state
+	## Run the metrics test first, so it starts from a clean state
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
+	AWS_DNS_PUBLIC_ZONE_ID="${AWS_DNS_PUBLIC_ZONE_ID}" \
 	go test -timeout 60m -v ./e2e/metrics -tags=e2e
 	## Run the other tests
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
@@ -152,7 +153,7 @@ endif
 
 .PHONY: local-setup
 local-setup: export KCP_VERSION=${KCP_BRANCH}
-local-setup: clean kind kcp build ## Setup kcp locally using kind.
+local-setup: clean kind kcp kustomize build ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS} ${LOCAL_SETUP_FLAGS}
 
 ##@ Build Dependencies
@@ -197,3 +198,14 @@ KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/k
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE):
 	curl -s $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN)
+
+# Generate metrics adoc content based on /metrics response from a running server
+.PHONY: gen-metrics-docs
+gen-metrics-docs:
+	curl http://localhost:8080/metrics > tmp/metrics.pef
+	go run ./utils/prometheus_format.go -f tmp/metrics.pef -c utils/prometheus_format_tables.csv > docs/observability/generated_metrics.adoc
+
+# Ensure the generated metrics content is latest
+.PHONY: verify-gen-metrics-docs
+verify-gen-metrics-docs: gen-metrics-docs
+	git diff --exit-code

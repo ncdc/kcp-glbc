@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,12 +23,13 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	"github.com/kcp-dev/logicalcluster"
 
 	kuadrantcluster "github.com/kuadrant/kcp-glbc/pkg/cluster"
 )
 
 func GetIngress(t Test, namespace *corev1.Namespace, name string) *networkingv1.Ingress {
+	t.T().Helper()
 	return Ingress(t, namespace, name)(t)
 }
 
@@ -42,6 +42,7 @@ func Ingress(t Test, namespace *corev1.Namespace, name string) func(g gomega.Gom
 }
 
 func GetIngresses(t Test, namespace *corev1.Namespace, labelSelector string) []networkingv1.Ingress {
+	t.T().Helper()
 	return Ingresses(t, namespace, labelSelector)(t)
 }
 
@@ -70,4 +71,16 @@ func HostsEqualsToGeneratedHost(ingress *networkingv1.Ingress) bool {
 		}
 	}
 	return equals
+}
+
+func HasTLSSecretForGeneratedHost(secret string) func(ingress *networkingv1.Ingress) bool {
+	return func(ingress *networkingv1.Ingress) bool {
+		hostname := ingress.Annotations[kuadrantcluster.ANNOTATION_HCG_HOST]
+		for _, tls := range ingress.Spec.TLS {
+			if len(tls.Hosts) == 1 && tls.Hosts[0] == hostname && tls.SecretName == secret {
+				return true
+			}
+		}
+		return false
+	}
 }

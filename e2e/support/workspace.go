@@ -1,5 +1,18 @@
 //go:build e2e
-// +build e2e
+
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package support
 
@@ -13,26 +26,33 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
+	"github.com/kcp-dev/logicalcluster"
 )
 
-func InWorkspace(workspace *tenancyv1alpha1.ClusterWorkspace) Option {
-	return &inWorkspace{workspace}
+func InWorkspace(workspace interface{}) Option {
+	switch w := workspace.(type) {
+	case *tenancyv1alpha1.ClusterWorkspace:
+		return &inWorkspace{logicalcluster.From(w).Join(w.Name)}
+	case logicalcluster.Name:
+		return &inWorkspace{w}
+	default:
+		return errorOption(func(to interface{}) error {
+			return fmt.Errorf("unsupported type passed to InWorkspace option: %s", workspace)
+		})
+	}
 }
 
 type inWorkspace struct {
-	workspace *tenancyv1alpha1.ClusterWorkspace
+	workspace logicalcluster.Name
 }
 
 var _ Option = &inWorkspace{}
 
 func (o *inWorkspace) applyTo(to interface{}) error {
-	logicalCluster := logicalcluster.From(o.workspace).Join(o.workspace.Name)
-
 	switch obj := to.(type) {
 	case metav1.Object:
-		obj.SetClusterName(logicalCluster.String())
+		obj.SetClusterName(o.workspace.String())
 
 	case *workloadClusterConfig:
 		obj.workspace = o.workspace

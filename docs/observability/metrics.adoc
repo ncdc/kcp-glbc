@@ -1,0 +1,46 @@
+## Generating metrics docs
+
+To generate metrics docs, you need to have a running controller locally.
+You should also create the sample echo-service so that all metrics get initialised.
+Note that some metrics may take a couple minutes to get initial values e.g. `glbc_tls_certificate_issuance_duration_seconds_bucket`
+
+Then run:
+
+```
+make gen-metrics-docs
+```
+
+There is a known issue with `process_` metrics missing on macos.
+This is a limitation of the prometheus client and how process data is gathered on macos.
+If you want to regenerate metrics docs on macos, you have 2 options.
+
+### 1. Slightly risky, but easy option
+
+Run the make target to pick up any new metrics changes. Then manually undo the removal of the `process_` metrics from the generated file.
+As this is manual, it could be prone to a mistake, or there could be new process metrics added that you don't become aware of.
+In either of those cases, the e2e PR test job should detect this and fail when running the `verify-gen-metrics-docs` target.
+
+### 2. Safe, but complex option
+
+First, run the controller in your local cluster by following the output at the end of `make local-setup`.
+
+Then, build & configure the controller to run your local code:
+
+```bash
+# Build a local image
+IMAGE_TAG=local make docker-build
+
+# Load the image into the kind cluster where glbc is running
+kind load docker-image quay.io/kuadrant/kcp-glbc:local --name kcp-cluster-glbc-control
+
+# Patch the deployment in kcp so it doesn't try pull the image and also uses the loaded image
+KUBECONFIG=./.kcp/admin.kubeconfig kubectl -n kcp-glbc patch deployment kcp-glbc-controller-manager --type json -p='[{"op":"replace","path":"/spec/template/spec/containers/0/image","value":"quay.io/kuadrant/kcp-glbc:local"},{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"Never"}]'
+```
+
+Next, set up port forwarding to the controller pod on port 8080 e.g. The pod name & namespace will be different each time.
+
+```bash
+kubectl port-forward kcp-glbc-controller-manager-5477dfdc8b-7xmwr 8080:8080 -n kcp89b5fd4ba9405ee7b18d0da859ce7420d36926bac4a97e01af5c244a
+```
+
+Finally, run the `make gen-metrics-docs` task.

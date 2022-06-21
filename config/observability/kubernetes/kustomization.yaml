@@ -1,4 +1,23 @@
-
 resources:
-  - prometheus
-  - grafana
+  - ../../kube-prometheus
+  - ingress-prometheus.yaml
+  - ingress-grafana.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+# Deploy Grafana Dashboards
+configMapGenerator:
+  - name: glbc-dashboard
+    namespace: monitoring
+    files:
+      - glbc_overview.json=dashboards/glbc.json
+
+# Patch grafana deployment to include dashboard configmaps
+patchesJson6902:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: grafana
+    path: grafana_patch.yaml

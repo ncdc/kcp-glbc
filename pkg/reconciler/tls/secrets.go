@@ -7,7 +7,7 @@ import (
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	"github.com/kcp-dev/logicalcluster"
 
 	"github.com/kuadrant/kcp-glbc/pkg/cluster"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
@@ -22,12 +22,12 @@ const (
 func (c *Controller) reconcile(ctx context.Context, secret *v1.Secret) error {
 	// create our context to avoid repeatedly pulling out annotations etc
 	kcpCtx, err := cluster.NewKCPObjectMapper(secret)
-	// TODO: use label selector in the controller to filter Secrets out
-	if err != nil && cluster.IsNoContextErr(err) {
-		// ignore this secret
-		return nil
-	}
 	if err != nil {
+		// TODO: use label selector in the controller to filter Secrets out
+		if cluster.IsNoContextErr(err) {
+			// ignore this secret
+			return nil
+		}
 		return err
 	}
 
@@ -36,24 +36,37 @@ func (c *Controller) reconcile(ctx context.Context, secret *v1.Secret) error {
 		if err := c.ensureDelete(ctx, kcpCtx, secret); err != nil {
 			return err
 		}
-		// remove finalizer from the control cluster secret so it can be cleaned up
+		// remove finalizer from the Secret, so it can be cleaned up
 		removeFinalizer(secret, secretsFinalizer)
 		if _, err = c.glbcKubeClient.CoreV1().Secrets(secret.Namespace).Update(ctx, secret, metav1.UpdateOptions{}); err != nil && !k8errors.IsNotFound(err) {
 			return err
 		}
 		return nil
 	}
-	AddFinalizer(secret, secretsFinalizer)
-	secret, err = c.glbcKubeClient.CoreV1().Secrets(secret.Namespace).Update(ctx, secret, metav1.UpdateOptions{})
-	if err != nil {
-		return err
+
+	if !containsFinalizer(secret, secretsFinalizer) {
+		addFinalizer(secret, secretsFinalizer)
+		secret, err = c.glbcKubeClient.CoreV1().Secrets(secret.Namespace).Update(ctx, secret, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
 	}
+
 	if err := c.ensureMirrored(ctx, kcpCtx, secret); err != nil {
 		c.Logger.Error(err, "Failed to mirror Secret", "secret", secret)
 		return err
 	}
 
 	return nil
+}
+
+func containsFinalizer(secret *v1.Secret, finalizer string) bool {
+	for _, f := range secret.Finalizers {
+		if f == finalizer {
+			return true
+		}
+	}
+	return false
 }
 
 func removeFinalizer(secret *v1.Secret, finalizer string) {
@@ -66,7 +79,7 @@ func removeFinalizer(secret *v1.Secret, finalizer string) {
 	}
 }
 
-func AddFinalizer(secret *v1.Secret, finalizer string) {
+func addFinalizer(secret *v1.Secret, finalizer string) {
 	for _, v := range secret.Finalizers {
 		if v == finalizer {
 			return
@@ -132,11 +145,10 @@ func (c *Controller) ensureMirrored(ctx context.Context, kctx cluster.ObjectMapp
 
 func (c *Controller) observeCertificateIssuanceDuration(kctx cluster.ObjectMapper, creationTimestamp metav1.Time, issuer string) {
 	// FIXME: refactor the certificate management so that metrics reflect actual state transitions rather than client requests, and so that it's possible to observe issuance errors
-	hostname := kctx.Host()
 	// The certificate request has successfully completed
 	tlsCertificateRequestTotal.WithLabelValues(issuer, resultLabelSucceeded).Inc()
 	// The certificate request has successfully completed so there is one less pending request
-	tls.CertificateRequestCount.WithLabelValues(issuer, hostname).Dec()
+	tls.CertificateRequestCount.WithLabelValues(issuer).Dec()
 
 	tlsCertificateIssuanceDuration.
 		WithLabelValues(issuer, resultLabelSucceeded).

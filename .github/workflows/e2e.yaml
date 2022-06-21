@@ -9,6 +9,12 @@ on:
       - '**.adoc'
       - '**.md'
       - 'samples/**'
+      - 'config/deploy**'
+      - 'config/grafana**'
+      - 'config/kcp**'
+      - 'config/observability**'
+      - 'config/prometheus**'
+      - 'utils/**.sh'
       - 'LICENSE'
   push:
     branches:
@@ -18,6 +24,12 @@ on:
       - '**.adoc'
       - '**.md'
       - 'samples/**'
+      - 'config/deploy**'
+      - 'config/grafana**'
+      - 'config/kcp**'
+      - 'config/observability**'
+      - 'config/prometheus**'
+      - 'utils/**.sh'
       - 'LICENSE'
 
 concurrency:
@@ -139,20 +151,35 @@ jobs:
           echo "Exporting KUBECONFIG=${KUBECONFIG}"
           echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
 
-          echo "Creating HCG Workspace"
+          echo "Creating Compute Service Workspace"
+          ./bin/kubectl-kcp workspace create kcp-glbc-user-compute --enter
+          kubectl create ns kcp-syncer
+          export KCP_SYNCER_IMAGE=ghcr.io/kcp-dev/kcp/syncer:release-0.5
+          ./bin/kubectl-kcp workload sync kcp-cluster-1 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services | kubectl --kubeconfig="${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-1.kubeconfig apply -f -
+          ./bin/kubectl-kcp workload sync kcp-cluster-2 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services | kubectl --kubeconfig="${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-2.kubeconfig apply -f -
+
+          echo "Creating GLBC Workspace"
+          ./bin/kubectl-kcp workspace ..
           ./bin/kubectl-kcp workspace create kcp-glbc --enter
 
+          echo "Waiting 15 seconds..."
+          sleep 15
+
+          echo "Register K8s APIs"
+          kubectl apply -f ./utils/kcp-contrib/crds
+
           echo "Export GLBC APIs"
-          # Workaround for https://github.com/kcp-dev/kcp/issues/1038
-          kubectl apply -f ./config/crd/bases
-          #
           kubectl apply -f ./utils/kcp-contrib/apiresourceschema.yaml
           kubectl apply -f ./utils/kcp-contrib/apiexport.yaml
 
           GLBC_LOG_FILE="${TEMP_DIR}"/glbc.log
           echo "GLBC_LOG_FILE=${GLBC_LOG_FILE}" >> $GITHUB_ENV
+          export AWS_DNS_PUBLIC_ZONE_ID=FAKE_ZONE_ID
+          echo "AWS_DNS_PUBLIC_ZONE_ID=FAKE_ZONE_ID" >> $GITHUB_ENV
           echo "Starting GLBC, sending logs to ${GLBC_LOG_FILE}"
-          ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --glbc-kubeconfig "${HOME}"/.kube/config --dns-provider fake --glbc-tls-provided true > ${GLBC_LOG_FILE} 2>&1 &
+          unset KUBECONFIG
+          kubectl config use-context kind-glbc
+          ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --dns-provider fake --glbc-tls-provided true > ${GLBC_LOG_FILE} 2>&1 &
           GLBC_PID=$!
           echo "GLBC_PID=${GLBC_PID}" >> $GITHUB_ENV
 
@@ -167,9 +194,13 @@ jobs:
         run: |
           export KUBECONFIG=${{ env.KUBECONFIG }}
           export CLUSTERS_KUBECONFIG_DIR=${{ env.CLUSTERS_KUBECONFIG_DIR }}
+          export AWS_DNS_PUBLIC_ZONE_ID=${{ env.AWS_DNS_PUBLIC_ZONE_ID }}
 
           # Then run e2e tests
           make e2e
+      - name: Verify generated metrics documentation
+        run: |
+          make verify-gen-metrics-docs
       - name: Shutdown GLBC
         if: ${{ always() }}
         run: |

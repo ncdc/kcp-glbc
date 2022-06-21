@@ -10,7 +10,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	"github.com/kcp-dev/logicalcluster"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
@@ -53,8 +53,12 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	c.dnsZones = dnsZones
 
 	c.sharedInformerFactory.Kuadrant().V1().DNSRecords().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { c.Enqueue(obj) },
-		UpdateFunc: func(_, obj interface{}) { c.Enqueue(obj) },
+		AddFunc: func(obj interface{}) { c.Enqueue(obj) },
+		UpdateFunc: func(old, obj interface{}) {
+			if old.(*v1.DNSRecord).Generation != obj.(*v1.DNSRecord).Generation {
+				c.Enqueue(obj)
+			}
+		},
 		DeleteFunc: func(obj interface{}) { c.Enqueue(obj) },
 	})
 

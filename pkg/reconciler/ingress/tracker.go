@@ -43,6 +43,7 @@ func (t *tracker) getIngressesForService(key string) sets.String {
 	return ingresses
 }
 
+//nolint
 // Adds a service to an ingress (key) to be tracked.
 func (t *tracker) add(ingress *networkingv1.Ingress, service *corev1.Service) {
 	t.lock.Lock()

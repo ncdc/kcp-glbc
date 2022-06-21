@@ -51,8 +51,10 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 			}
 			c.Enqueue(obj)
 		},
-		UpdateFunc: func(_, obj interface{}) {
-			c.Enqueue(obj)
+		UpdateFunc: func(old, obj interface{}) {
+			if old.(*corev1.Secret).ResourceVersion != obj.(*corev1.Secret).ResourceVersion {
+				c.Enqueue(obj)
+			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			secret := obj.(*corev1.Secret)

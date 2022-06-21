@@ -1,0 +1,13 @@
+- op: add
+  path: /spec/template/spec/volumes/-
+  value:
+    name: glbc-dashboard
+    configMap:
+     defaultMode: 420
+     name: glbc-dashboard
+
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    name: glbc-dashboard
+    mountPath: /grafana-dashboard-definitions/0/glbc-dashboard

@@ -5,7 +5,7 @@ package v1
 import (
 	"net/http"
 
-	logicalcluster "github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	logicalcluster "github.com/kcp-dev/logicalcluster"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
@@ -19,7 +19,7 @@ type KuadrantV1Interface interface {
 // KuadrantV1Client is used to interact with features provided by the kuadrant.dev group.
 type KuadrantV1Client struct {
 	restClient rest.Interface
-	cluster    logicalcluster.LogicalCluster
+	cluster    logicalcluster.Name
 }
 
 func (c *KuadrantV1Client) DNSRecords(namespace string) DNSRecordInterface {
@@ -71,7 +71,7 @@ func New(c rest.Interface) *KuadrantV1Client {
 }
 
 // NewWithCluster creates a new KuadrantV1Client for the given RESTClient and cluster.
-func NewWithCluster(c rest.Interface, cluster logicalcluster.LogicalCluster) *KuadrantV1Client {
+func NewWithCluster(c rest.Interface, cluster logicalcluster.Name) *KuadrantV1Client {
 	return &KuadrantV1Client{restClient: c, cluster: cluster}
 }
 

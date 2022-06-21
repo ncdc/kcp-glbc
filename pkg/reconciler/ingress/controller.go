@@ -14,12 +14,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
 	tenancyv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1"
+	"github.com/kcp-dev/logicalcluster"
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/net"
-	"github.com/kuadrant/kcp-glbc/pkg/placement"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 )
@@ -36,7 +35,6 @@ func NewController(config *ControllerConfig) *Controller {
 		impl.Client = config.KubeClient.Cluster(tenancyv1alpha1.RootCluster)
 	}
 	hostResolver = net.NewSafeHostResolver(hostResolver)
-	ingressPlacer := placement.NewPlacer()
 
 	base := reconciler.NewController(controllerName, queue)
 	c := &Controller{
@@ -50,21 +48,31 @@ func NewController(config *ControllerConfig) *Controller {
 		hostResolver:          hostResolver,
 		hostsWatcher:          net.NewHostsWatcher(&base.Logger, hostResolver, net.DefaultInterval),
 		customHostsEnabled:    config.CustomHostsEnabled,
-		ingressPlacer:         ingressPlacer,
 	}
 	c.Process = c.process
 	c.hostsWatcher.OnChange = c.Enqueue
 
 	// Watch for events related to Ingresses
 	c.sharedInformerFactory.Networking().V1().Ingresses().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { c.Enqueue(obj) },
+		AddFunc: func(obj interface{}) {
+			ingressObjectTotal.Inc()
+			c.Enqueue(obj)
+		},
 		UpdateFunc: func(_, obj interface{}) { c.Enqueue(obj) },
-		DeleteFunc: func(obj interface{}) { c.Enqueue(obj) },
+		DeleteFunc: func(obj interface{}) {
+			ingressObjectTotal.Dec()
+			c.Enqueue(obj)
+		},
 	})
 
 	// Watch for events related to Services
 	c.sharedInformerFactory.Core().V1().Services().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		UpdateFunc: func(_, obj interface{}) { c.ingressesFromService(obj) },
+		AddFunc: func(obj interface{}) { c.ingressesFromService(obj) },
+		UpdateFunc: func(old, obj interface{}) {
+			if old.(*corev1.Service).ResourceVersion != obj.(*corev1.Service).ResourceVersion {
+				c.ingressesFromService(obj)
+			}
+		},
 		DeleteFunc: func(obj interface{}) { c.ingressesFromService(obj) },
 	})
 
@@ -97,7 +105,6 @@ type Controller struct {
 	hostResolver          net.HostResolver
 	hostsWatcher          *net.HostsWatcher
 	customHostsEnabled    bool
-	ingressPlacer         placement.Placer
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {
@@ -129,7 +136,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	return nil
 }
 
-// ingressesFromService enqueues all the related ingresses for a given service when the service is changed.
+// ingressesFromService enqueues all the related Ingresses for a given service when the service is changed.
 func (c *Controller) ingressesFromService(obj interface{}) {
 	service := obj.(*corev1.Service)
 

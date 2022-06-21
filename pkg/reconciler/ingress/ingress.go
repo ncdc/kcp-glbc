@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	"github.com/kcp-dev/logicalcluster"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/cluster"
@@ -70,10 +70,6 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 		if err != nil {
 			return err
 		}
-	}
-
-	if err := c.ensurePlacement(ctx, ingress); err != nil {
-		return err
 	}
 
 	// setup certificates
@@ -159,10 +155,15 @@ func (c *Controller) ensureDNS(ctx context.Context, ingress *networkingv1.Ingres
 				return err
 			}
 			// Create the resource in the cluster
-			_, err = c.dnsRecordClient.Cluster(logicalcluster.From(record)).KuadrantV1().DNSRecords(record.Namespace).Create(ctx, record, metav1.CreateOptions{})
+			existing, err = c.dnsRecordClient.Cluster(logicalcluster.From(record)).KuadrantV1().DNSRecords(record.Namespace).Create(ctx, record, metav1.CreateOptions{})
 			if err != nil {
 				return err
 			}
+
+			// metric to observe the ingress admission time
+			ingressObjectTimeToAdmission.
+				Observe(existing.CreationTimestamp.Time.Sub(ingress.CreationTimestamp.Time).Seconds())
+
 		} else if err == nil {
 			// If it does exist, update it
 			if err := c.setDnsRecordFromIngress(ctx, ingress, existing); err != nil {
@@ -286,6 +287,7 @@ func (c *Controller) targetsFromIngressStatus(ctx context.Context, status networ
 	return targets, nil
 }
 
+//nolint
 // getServices will parse the ingress object and return a list of the services.
 func (c *Controller) getServices(ctx context.Context, ingress *networkingv1.Ingress) ([]*corev1.Service, error) {
 	var services []*corev1.Service
@@ -304,21 +306,6 @@ func (c *Controller) getServices(ctx context.Context, ingress *networkingv1.Ingr
 		}
 	}
 	return services, nil
-}
-
-func (c *Controller) ensurePlacement(ctx context.Context, ingress *networkingv1.Ingress) error {
-	svcs, err := c.getServices(ctx, ingress)
-	if err != nil {
-		return err
-	}
-	if err := c.ingressPlacer.PlaceRoutingObj(svcs, ingress); err != nil {
-		return err
-	}
-	if _, err := c.kubeClient.Cluster(logicalcluster.From(ingress)).NetworkingV1().Ingresses(ingress.Namespace).Update(ctx, ingress, metav1.UpdateOptions{}); err != nil {
-		return err
-	}
-	return nil
-
 }
 
 func (c *Controller) patchIngress(ctx context.Context, ingress *networkingv1.Ingress, data []byte) (*networkingv1.Ingress, error) {

@@ -21,8 +21,7 @@ import (
 )
 
 const (
-	issuerLabel   = "issuer"
-	hostnameLabel = "hostname"
+	issuerLabel = "issuer"
 )
 
 var (
@@ -36,7 +35,6 @@ var (
 		},
 		[]string{
 			issuerLabel,
-			hostnameLabel,
 		},
 	)
 )
@@ -51,7 +49,5 @@ func init() {
 func InitMetrics(provider Provider) {
 	// Initialize metrics
 	issuer := provider.IssuerID()
-	for _, domain := range provider.Domains() {
-		CertificateRequestCount.WithLabelValues(issuer, domain).Set(0)
-	}
+	CertificateRequestCount.WithLabelValues(issuer).Set(0)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -20,10 +21,11 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	"github.com/kcp-dev/apimachinery/pkg/logicalcluster"
+	"github.com/kcp-dev/logicalcluster"
 
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/informers/externalversions"
@@ -45,13 +47,15 @@ const (
 )
 
 var options struct {
-	// The path to the GLBC kubeconfig
-	GlbcKubeconfig string
-	// The path to the KCP kubeconfig
+	// The path to the kcp kubeconfig
 	Kubeconfig string
-	// The KCP context
+	// The kcp context
 	Kubecontext string
-	// The KCP logical cluster
+	// The user compute workspace
+	ComputeWorkspace string
+	// The GLBC workspace
+	GLBCWorkspace string
+	// The kcp logical cluster
 	LogicalClusterTarget string
 	// Whether to generate TLS certificates for hosts
 	TLSProviderEnabled bool
@@ -72,19 +76,19 @@ var options struct {
 func init() {
 	flagSet := flag.CommandLine
 
-	// Control cluster client options
-	flagSet.StringVar(&options.GlbcKubeconfig, "glbc-kubeconfig", "", "Path to GLBC kubeconfig")
 	// KCP client options
 	flagSet.StringVar(&options.Kubeconfig, "kubeconfig", "", "Path to kubeconfig")
 	flagSet.StringVar(&options.Kubecontext, "context", env.GetEnvString("GLBC_KCP_CONTEXT", ""), "Context to use in the Kubeconfig file, instead of the current context")
+	flagSet.StringVar(&options.ComputeWorkspace, "compute-workspace", env.GetEnvString("GLBC_COMPUTE_WORKSPACE", "root:default:kcp-glbc-user-compute"), "The user compute workspace")
+	flagSet.StringVar(&options.GLBCWorkspace, "glbc-workspace", env.GetEnvString("GLBC_WORKSPACE", "root:default:kcp-glbc"), "The GLBC workspace")
 	flagSet.StringVar(&options.LogicalClusterTarget, "logical-cluster", env.GetEnvString("GLBC_LOGICAL_CLUSTER_TARGET", "*"), "set the target logical cluster")
 	// TLS certificate issuance options
-	flagSet.BoolVar(&options.TLSProviderEnabled, "glbc-tls-provided", env.GetEnvBool("GLBC_TLS_PROVIDED", false), "Whether to generate TLS certificates for hosts")
+	flagSet.BoolVar(&options.TLSProviderEnabled, "glbc-tls-provided", env.GetEnvBool("GLBC_TLS_PROVIDED", true), "Whether to generate TLS certificates for hosts")
 	flagSet.StringVar(&options.TLSProvider, "glbc-tls-provider", env.GetEnvString("GLBC_TLS_PROVIDER", "glbc-ca"), "The TLS certificate issuer, one of [glbc-ca, le-staging, le-production]")
 	// DNS management options
-	flagSet.StringVar(&options.Domain, "domain", env.GetEnvString("GLBC_DOMAIN", "hcpapps.net"), "The domain to use to expose ingresses")
+	flagSet.StringVar(&options.Domain, "domain", env.GetEnvString("GLBC_DOMAIN", "dev.hcpapps.net"), "The domain to use to expose ingresses")
 	flagSet.BoolVar(&options.EnableCustomHosts, "enable-custom-hosts", env.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false), "Flag to enable hosts to be custom")
-	flag.StringVar(&options.DNSProvider, "dns-provider", env.GetEnvString("GLBC_DNS_PROVIDER", "aws"), "The DNS provider being used [aws, fake]")
+	flag.StringVar(&options.DNSProvider, "dns-provider", env.GetEnvString("GLBC_DNS_PROVIDER", "fake"), "The DNS provider being used [aws, fake]")
 	// // AWS Route53 options
 	flag.StringVar(&options.Region, "region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
 	//  Observability options
@@ -111,35 +115,59 @@ func init() {
 var controllersGroup = sync.WaitGroup{}
 
 func main() {
-	var overrides clientcmd.ConfigOverrides
-	if options.Kubecontext != "" {
-		overrides.CurrentContext = options.Kubecontext
-	}
+	// start listening on the metrics endpoint
+	metricsServer, err := metrics.NewServer(options.MonitoringPort)
+	exitOnError(err, "Failed to create metrics server")
 
-	kcpClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: options.Kubeconfig},
-		&overrides).ClientConfig()
-	exitOnError(err, "Failed to create KCP config")
+	ctx := genericapiserver.SetupSignalContext()
+	g, gCtx := errgroup.WithContext(ctx)
 
-	glbcClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: options.GlbcKubeconfig},
+	g.Go(metricsServer.Start)
+
+	defaultClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		clientcmd.NewDefaultClientConfigLoadingRules(),
 		&clientcmd.ConfigOverrides{}).ClientConfig()
 	exitOnError(err, "Failed to create K8S config")
 
-	ctx := genericapiserver.SetupSignalContext()
+	defaultKubeClient, err := kubernetes.NewForConfig(defaultClientConfig)
+	exitOnError(err, "Failed to create K8S core client")
 
-	kcpKubeClient, err := kubernetes.NewClusterForConfig(kcpClientConfig)
+	// kcp bootstrap client
+	kcpClientConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: options.Kubeconfig},
+		&clientcmd.ConfigOverrides{CurrentContext: options.Kubecontext}).ClientConfig()
+	exitOnError(err, "Failed to create KCP config")
+
+	// kcp compute client, providing access to the APIs negotiated with workload clusters,
+	// i.e., Ingress, Service, Deployment, bootstrapped from the kubernetes APIExport of the
+	// GLBC compute workspace.
+	computeClientConfig := rest.CopyConfig(kcpClientConfig)
+	computeClientConfig.Host = getAPIExportVirtualWorkspaceURL(kcpClientConfig, "kubernetes", options.ComputeWorkspace)
+	log.Logger.Info(fmt.Sprintf("computeClientConfig.Host: %s", computeClientConfig.Host))
+	kcpKubeClient, err := kubernetes.NewClusterForConfig(computeClientConfig)
 	exitOnError(err, "Failed to create KCP core client")
 	kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
-	kcpKuadrantClient, err := kuadrantv1.NewClusterForConfig(kcpClientConfig)
+	// Override the Kubernetes client as create and delete operations are not working yet
+	// via the APIExport virtual workspace API server.
+	// See https://github.com/kcp-dev/kcp/issues/1253 for more details.
+	kcpKubeClient, err = kubernetes.NewClusterForConfig(kcpClientConfig)
+	exitOnError(err, "Failed to create KCP kuadrant client")
+
+	// GLBC APIs client, i.e., for DNSRecord resources, bootstrapped from the GLBC workspace.
+	glbcClientConfig := rest.CopyConfig(kcpClientConfig)
+	glbcClientConfig.Host = getAPIExportVirtualWorkspaceURL(kcpClientConfig, "glbc", options.GLBCWorkspace)
+	log.Logger.Info(fmt.Sprintf("glbcClientConfig.Host: %s", glbcClientConfig.Host))
+
+	kcpKuadrantClient, err := kuadrantv1.NewClusterForConfig(glbcClientConfig)
 	exitOnError(err, "Failed to create KCP kuadrant client")
 	kcpKuadrantInformerFactory := externalversions.NewSharedInformerFactory(kcpKuadrantClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
-	// glbcKubeClient targets the control cluster (this is the cluster where glbc is deployed).
-	// This is not a KCP cluster.
-	glbcKubeClient, err := kubernetes.NewForConfig(glbcClientConfig)
-	exitOnError(err, "Failed to create K8S core client")
+	// Override the Kuadrant client as create and delete operations are not working yet
+	// via the APIExport virtual workspace API server.
+	// See https://github.com/kcp-dev/kcp/issues/1253 for more details.
+	kcpKuadrantClient, err = kuadrantv1.NewClusterForConfig(kcpClientConfig)
+	exitOnError(err, "Failed to create KCP kuadrant client")
 
 	namespace := env.GetNamespace()
 
@@ -165,10 +193,10 @@ func main() {
 
 		certProvider, err = tls.NewCertManager(tls.CertManagerConfig{
 			DNSValidator:  tls.DNSValidatorRoute53,
-			CertClient:    certmanclient.NewForConfigOrDie(glbcClientConfig),
+			CertClient:    certmanclient.NewForConfigOrDie(defaultClientConfig),
 			CertProvider:  tlsCertProvider,
 			Region:        options.Region,
-			K8sClient:     glbcKubeClient,
+			K8sClient:     defaultKubeClient,
 			ValidDomains:  []string{options.Domain},
 			CertificateNS: namespace,
 		})
@@ -182,10 +210,10 @@ func main() {
 		exitOnError(err, "Failed to initialize cert provider")
 	}
 
-	glbcKubeInformerFactory := informers.NewSharedInformerFactoryWithOptions(glbcKubeClient, time.Minute, informers.WithNamespace(namespace))
+	glbcKubeInformerFactory := informers.NewSharedInformerFactoryWithOptions(defaultKubeClient, time.Minute, informers.WithNamespace(namespace))
 	tlsController, err := tlsreconciler.NewController(&tlsreconciler.ControllerConfig{
 		GlbcSecretInformer: glbcKubeInformerFactory.Core().V1().Secrets(),
-		GlbcKubeClient:     glbcKubeClient,
+		GlbcKubeClient:     defaultKubeClient,
 		KcpKubeClient:      kcpKubeClient,
 	})
 	exitOnError(err, "Failed to create TLS certificate controller")
@@ -236,14 +264,6 @@ func main() {
 		glbcKubeInformerFactory.WaitForCacheSync(ctx.Done())
 	}
 
-	// start listening on the metrics endpoint
-	metricsServer, err := metrics.NewServer(options.MonitoringPort)
-	exitOnError(err, "Failed to create metrics server")
-
-	g, gCtx := errgroup.WithContext(ctx)
-
-	g.Go(metricsServer.Start)
-
 	start(gCtx, ingressController)
 	start(gCtx, dnsRecordController)
 	if options.TLSProviderEnabled {
@@ -278,4 +298,12 @@ func exitOnError(err error, msg string) {
 		log.Logger.Error(err, msg)
 		os.Exit(1)
 	}
+}
+
+func getAPIExportVirtualWorkspaceURL(config *rest.Config, exportName, exportPath string) string {
+	cfg := rest.CopyConfig(config)
+	u, err := url.Parse(cfg.Host)
+	exitOnError(err, "Failed to parse client config host")
+	u.Path = fmt.Sprintf("/services/apiexport/%s/%s", exportPath, exportName)
+	return u.String()
 }
