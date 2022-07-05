@@ -59,7 +59,6 @@ jobs:
         run: echo "Image pushed to ${{ steps.push-to-quay.outputs.registry-paths }}"
 
   deploy:
-    if: "github.repository_owner == 'kuadrant' && github.ref_name == 'main'"
     name: Deploy KCP GLBC Image
     environment: unstable
     runs-on: ubuntu-20.04
