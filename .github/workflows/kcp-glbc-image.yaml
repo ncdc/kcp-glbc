@@ -76,4 +76,6 @@ jobs:
         id: deploy-image
         run: |-
           export PATH="${PATH}:$(pwd)/bin/"
-          kubectl --server=https://${{ secrets.CICD_KUBE_HOST }} --token=${{ secrets.CICD_KUBE_TOKEN }} -n ${{ secrets.CICD_KUBE_NS }} patch deployment kcp-glbc-controller-manager --patch '{"spec": {"template": {"spec": {"containers": [{"name": "manager","image": "${{ env.IMG_REGISTRY_HOST }}/${{ env.IMG_REGISTRY_ORG }}/kcp-glbc:${{ needs.build.outputs.sha_short }}" }]}}}}'
+          export CONTROLLER_IMAGE=${{ env.IMG_REGISTRY_HOST }}/${{ env.IMG_REGISTRY_ORG }}/kcp-glbc:${{ needs.build.outputs.sha_short }}
+          echo "Controller Image: ${{ CONTROLLER_IMAGE }}"
+          kubectl --server=https://${{ secrets.CICD_KUBE_HOST }} --token=${{ secrets.CICD_KUBE_TOKEN }} -n ${{ secrets.CICD_KUBE_NS }} patch deployment kcp-glbc-controller-manager --patch '{"spec": {"template": {"spec": {"containers": [{"name": "manager","image": "${{ CONTROLLER_IMAGE }}"}]}}}}'
