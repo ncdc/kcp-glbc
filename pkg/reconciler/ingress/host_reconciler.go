@@ -35,9 +35,7 @@ func (r *hostReconciler) reconcile(ctx context.Context, ingress *networkingv1.In
 			customHosts = append(customHosts, rule.Host)
 		}
 	}
-	// clean up replaced hosts from the tls list
 	removeHostsFromTLS(customHosts, ingress)
-
 	if len(customHosts) > 0 {
 		ingress.Annotations[ANNOTATION_HCG_CUSTOM_HOST_REPLACED] = fmt.Sprintf(" replaced custom hosts %v to the glbc host due to custom host policy not being allowed",
 			customHosts)
