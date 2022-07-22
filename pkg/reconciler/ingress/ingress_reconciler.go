@@ -7,6 +7,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/kuadrant/kcp-glbc/pkg/host"
 	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	"github.com/kuadrant/kcp-glbc/pkg/util/workloadMigration"
 	utilserrors "k8s.io/apimachinery/pkg/util/errors"
@@ -35,8 +36,8 @@ func (c *Controller) reconcile(ctx context.Context, ingress *networkingv1.Ingres
 	reconcilers := []reconciler{
 		//hostReconciler is first as the others depends on it for the host to be set on the ingress
 		&hostReconciler{
-			managedDomain: c.domain,
-			log:           c.Logger,
+			hosts: host.NewService(c.domain),
+			log:   c.Logger,
 		},
 		&certificateReconciler{
 			createCertificate:    c.certProvider.Create,
