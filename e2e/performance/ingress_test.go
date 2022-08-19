@@ -75,7 +75,7 @@ func TestIngress(t *testing.T) {
 	wg := sync.WaitGroup{}
 	for i := 1; i <= ingressCount; i++ {
 		wg.Add(1)
-		go func() {
+		go func (){
 			defer wg.Done()
 			ingress := createTestIngress(test, namespace)
 			test.Expect(ingress).NotTo(BeNil())
@@ -130,7 +130,7 @@ func TestIngress(t *testing.T) {
 	test.Eventually(DNSRecords(test, namespace, "")).Should(HaveLen(0))
 	// ToDo Uncomment this as part of the KCP 0.6 upgrade.
 	// Currently a finalizer is left on teh secret that never gets removed preventing it from ever deleting
-	test.Eventually(Secrets(test, namespace, "kuadrant.dev/hcg.managed=true")).Should(HaveLen(0))
+	//test.Eventually(Secrets(test, namespace, "kuadrant.dev/hcg.managed=true")).Should(HaveLen(0))
 
 	// Finally, delete the test deployment and service resources
 	test.Expect(test.Client().Core().CoreV1().Services(namespace.Name).

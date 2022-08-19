@@ -40,7 +40,6 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/deployment"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
-	"github.com/kuadrant/kcp-glbc/pkg/reconciler/secret"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 	"github.com/kuadrant/kcp-glbc/pkg/util/env"
@@ -225,12 +224,6 @@ func main() {
 	})
 	exitOnError(err, "Failed to create Deployment controller")
 
-	secretController, err := secret.NewController(&secret.ControllerConfig{
-		SecretsClient:         kcpKubeClient,
-		SharedInformerFactory: kcpKubeInformerFactory,
-	})
-	exitOnError(err, "Failed to create Secret controller")
-
 	kcpKubeInformerFactory.Start(ctx.Done())
 	kcpKubeInformerFactory.WaitForCacheSync(ctx.Done())
 
@@ -249,7 +242,6 @@ func main() {
 
 	start(gCtx, serviceController)
 	start(gCtx, deploymentController)
-	start(gCtx, secretController)
 
 	g.Go(func() error {
 		// wait until the controllers have return before stopping serving metrics
