@@ -11,6 +11,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 
 	// Make sure our workqueue MetricsProvider is the first to register
 	_ "github.com/kuadrant/kcp-glbc/pkg/reconciler"
@@ -40,6 +42,7 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/deployment"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/ingress"
+	"github.com/kuadrant/kcp-glbc/pkg/reconciler/route"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/secret"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/service"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
@@ -150,6 +153,10 @@ func main() {
 	exitOnError(err, "Failed to create KCP core client")
 	kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
+	kcpDynamicClient, err := dynamic.NewClusterForConfig(glbcVWClientConfig)
+	exitOnError(err, "Failed to create KCP dynamic client")
+	kcpDynamicInformerFactory := dynamicinformer.NewDynamicSharedInformerFactory(kcpDynamicClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
+
 	// certificate client targeting the glbc workspace
 	certClient := certmanclient.NewForConfigOrDie(kcpClientConfig)
 
@@ -212,6 +219,21 @@ func main() {
 		CustomHostsEnabled: options.EnableCustomHosts,
 	})
 
+	routeController := route.NewController(&route.ControllerConfig{
+		KubeClient:                      kcpKubeClient,
+		DnsRecordClient:                 kcpKuadrantClient,
+		KubeDynamicClient:               kcpDynamicClient,
+		DNSRecordInformer:               kcpKuadrantInformerFactory,
+		KCPSharedInformerFactory:        kcpKubeInformerFactory,
+		KCPDynamicSharedInformerFactory: kcpDynamicInformerFactory,
+		CertificateInformer:             certificateInformerFactory,
+		GlbcInformerFactory:             glbcKubeInformerFactory,
+		Domain:                          options.Domain,
+		CertProvider:                    certProvider,
+		HostResolver:                    net.NewDefaultHostResolver(),
+		CustomHostsEnabled:              options.EnableCustomHosts,
+	})
+
 	dnsRecordController, err := dns.NewController(&dns.ControllerConfig{
 		DnsRecordClient:       kcpKuadrantClient,
 		SharedInformerFactory: kcpKuadrantInformerFactory,
@@ -243,6 +265,9 @@ func main() {
 	kcpKuadrantInformerFactory.Start(ctx.Done())
 	kcpKuadrantInformerFactory.WaitForCacheSync(ctx.Done())
 
+	kcpDynamicInformerFactory.Start(ctx.Done())
+	kcpDynamicInformerFactory.WaitForCacheSync(ctx.Done())
+
 	if options.TLSProviderEnabled {
 		certificateInformerFactory.Start(ctx.Done())
 		certificateInformerFactory.WaitForCacheSync(ctx.Done())
@@ -251,6 +276,7 @@ func main() {
 	}
 
 	start(gCtx, ingressController)
+	start(gCtx, routeController)
 	start(gCtx, dnsRecordController)
 
 	start(gCtx, serviceController)

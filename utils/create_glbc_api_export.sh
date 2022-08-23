@@ -36,7 +36,7 @@ help()
    echo "Syntax: create_glbc_api_export.sh [-n|w|W]"
    echo "options:"
    echo "n     The name of the glbc export to create (default: ${GLBC_EXPORT_NAME})."
-   echo "w     The workspace containing the \"kubernetes\" APIBinding being targetted (default: ${GLBC_WORKSPACE_USER})."
+   echo "w     The workspace containing the \"kubernetes\" APIBinding being targeted (default: ${GLBC_WORKSPACE_USER})."
    echo "W     The workspace where GLBC is deployed (default: ${GLBC_WORKSPACE})."
    echo
 }
@@ -83,6 +83,9 @@ spec:
     - group: "networking.k8s.io"
       resource: "ingresses"
       identityHash: ${identityHash}
+    - group: "route.openshift.io"
+      resource: "routes"
+      identityHash: ${identityHash}
 EOF
   kubectl wait --timeout=60s --for=condition=VirtualWorkspaceURLsReady=true apiexport $name
 }
@@ -113,6 +116,9 @@ spec:
       identityHash: ${identityHash}
     - group: "networking.k8s.io"
       resource: "ingresses"
+      identityHash: ${identityHash}
+    - group: "route.openshift.io"
+      resource: "routes"
       identityHash: ${identityHash}
 EOF
   kubectl wait --timeout=120s --for=condition=Ready=true apibinding $name

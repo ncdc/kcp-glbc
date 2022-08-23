@@ -130,6 +130,8 @@ create_workload_cluster() {
     echo "   kubectl apply -f ${OUTPUT_DIR}/${1}-syncer.yaml"
     echo ""
   }
+  # Enable advanced scheduling
+  kubectl annotate --overwrite synctarget ${1} featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
   kubectl wait --timeout=60s --for=condition=VirtualWorkspaceURLsReady=true apiexport kubernetes
 
   if [[ $WAIT_WC_READY = "true" ]]; then
@@ -144,7 +146,7 @@ deploy_cert_manager() {
   create_ns "cert-manager"
   kubectl apply -f ${KCP_GLBC_DIR}/config/cert-manager/cert-manager.yaml
   echo "Waiting for Cert Manager deployments to be ready..."
-  kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
+#  kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
 }
 
 deploy_glbc() {
@@ -158,7 +160,7 @@ deploy_glbc() {
   echo "Deploying GLBC"
   ${KUSTOMIZE_BIN} build ${GLBC_KUSTOMIZATION} | kubectl apply -f -
   echo "Waiting for GLBC deployments to be ready..."
-  kubectl -n ${GLBC_NAMESPACE} wait --timeout=300s --for=condition=Available deployments --all
+#  kubectl -n ${GLBC_NAMESPACE} wait --timeout=300s --for=condition=Available deployments --all
 }
 
 deploy_glbc_observability() {
