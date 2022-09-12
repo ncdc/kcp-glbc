@@ -15,6 +15,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+var (
+	NoSuchHost = errors.New("no such host")
+)
+
+func IsNoSuchHostError(err error) bool {
+	return err.Error() == NoSuchHost.Error()
+}
+
 type HostResolver interface {
 	LookupIPAddr(ctx context.Context, host string) ([]HostAddress, error)
 }
@@ -64,6 +72,38 @@ func (r *ConfigMapHostResolver) LookupIPAddr(ctx context.Context, host string) (
 	}
 
 	return result, nil
+}
+
+func (r *ConfigMapHostResolver) TxtRecordExists(ctx context.Context, domain string, value string) (bool, error) {
+	configMap, err := r.Client.CoreV1().ConfigMaps(r.Namespace).Get(ctx, r.Name, v1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	if configMap.Data == nil {
+		return false, NoSuchHost
+	}
+
+	ipsValue, ok := configMap.Data[domain]
+	if !ok {
+		return false, NoSuchHost
+	}
+
+	var values []struct {
+		TXT string
+	}
+
+	if err := json.Unmarshal([]byte(ipsValue), &values); err != nil {
+		return false, err
+	}
+
+	for _, entry := range values {
+		if entry.TXT == value {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 type DefaultHostResolver struct {

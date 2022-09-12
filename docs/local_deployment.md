@@ -14,10 +14,10 @@ $ make local-setup
 
 ### Terminal 2
 
-Target the local deployment kcp kubeconfig:
+Target the admin kcp kubeconfig:
 
 ```shell
-export KUBECONFIG=config/deploy/local/kcp.kubeconfig
+export KUBECONFIG=.kcp/admin.kubeconfig
 ```
 
 #### Check local setup state
@@ -31,97 +31,40 @@ can be used to modify the configuration of GLBC.
 $ tree -I '*.yaml|*.template' config/deploy/local/
 config/deploy/local/
 ├── aws-credentials.env
-├── controller-config.env
-└── kcp.kubeconfig
+└── controller-config.env
 ```
 
 These files will not be committed and can be modified as required by you.
 
 ##### Workspaces
 
-The following workspaces are created:
+**root:kuadrant**
 
 ```shell
-$ ./bin/kubectl-kcp workspace
-Current workspace is "root:default".
-$ ./bin/kubectl-kcp workspace list
-NAME                    TYPE        PHASE   URL
-kcp-glbc                Universal   Ready   https://192.168.0.103:6443/clusters/root:default:kcp-glbc
-kcp-glbc-compute        Universal   Ready   https://192.168.0.103:6443/clusters/root:default:kcp-glbc-compute
-kcp-glbc-user           Universal   Ready   https://192.168.0.103:6443/clusters/root:default:kcp-glbc-user
-kcp-glbc-user-compute   Universal   Ready   https://192.168.0.103:6443/clusters/root:default:kcp-glbc-user-compute
-```
-
-**kcp-glbc**
-
-```shell
-$ ./bin/kubectl-kcp workspace use root:default:kcp-glbc
-Current workspace is "root:default:kcp-glbc".
+$ ./bin/kubectl-kcp ws root:kuadrant
+Current workspace is "root:kuadrant" (type "root:universal").
 $ kubectl get apiexports
 NAME                  AGE
-cert-manager-stable   16m
-glbc                  16m
+cert-manager-stable   15m
+glbc-root-kuadrant         12m
+kubernetes            15m
 $ kubectl get apibindings
-NAME           AGE
-cert-manager   16m
-glbc           16m
-kubernetes     16m
-$ kubectl get deployments --all-namespaces
+NAME                  AGE
+apiresource.kcp.dev   16m
+cert-manager          15m
+glbc                  13m
+kubernetes            15m
+scheduling.kcp.dev    16m
+tenancy.kcp.dev       16m
+workload.kcp.dev      16m
+$ kubectl get deployments -A
 NAMESPACE      NAME           READY   UP-TO-DATE   AVAILABLE   AGE
-cert-manager   cert-manager   1/1     1            1           15m
-```
-
-**kcp-glbc-compute**
-
-```shell
-$ ./bin/kubectl-kcp workspace use root:default:kcp-glbc-compute
-Current workspace is "root:default:kcp-glbc-compute".
-$ kubectl get workloadclusters -o wide
-NAME   LOCATION   READY   SYNCED API RESOURCES
-glbc   glbc       True    
-$ kubectl get apiexports
-NAME         AGE
-kubernetes   14m
-$ kubectl get apibindings
-NAME         AGE
-kubernetes   14m
-$ kubectl get negotiatedapiresources
-NAME
-deployments.v1.apps
-ingresses.v1.networking.k8s.io
-services.v1.core
-```
-
-**kcp-glbc-user**
-
-```shell
-$ ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
-Current workspace is "root:default:kcp-glbc-user".
-$ kubectl get apiexports
-No resources found
-$ kubectl get apibindings
-NAME         AGE
-glbc         20m
-kubernetes   20m
-$ kubectl get deployments --all-namespaces
-No resources found
-```
-
-**kcp-glbc-user-compute**
-
-```shell
-$ ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user-compute
-Current workspace is "root:default:kcp-glbc-user-compute".
-$ kubectl get workloadclusters -o wide
-NAME            LOCATION        READY   SYNCED API RESOURCES
-kcp-cluster-1   kcp-cluster-1   True    
-kcp-cluster-2   kcp-cluster-2   True    
-$ kubectl get apiexports
-NAME         AGE
-kubernetes   16m
-$ kubectl get apibindings
-NAME         AGE
-kubernetes   16m
+cert-manager   cert-manager   0/1     0            0           13m
+$ kubectl get synctargets -o wide
+NAME            LOCATION        READY   SYNCED API RESOURCES   KEY                                      AGE
+glbc            glbc            True                           832Kocbfr9pZCD62hs7bt3No2aylrt9lYwTJYa   16m
+kcp-cluster-1   kcp-cluster-1   True                           aSmDOEWMWf6IEqrPjoUAOgn0XNeFUa05deJjLB   14m
+kcp-cluster-2   kcp-cluster-2   True                           9o7VjBmvhoDPLl1txc7N6EaXcWyU5oxorBOXdp   14m
 $ kubectl get negotiatedapiresources
 NAME
 deployments.v1.apps
@@ -131,25 +74,29 @@ services.v1.core
 
 #### Deploy GLBC
 
+```shell
+$ ./bin/kubectl-kcp ws root:kuadrant
+````
+
 Deploy the GLBC into the `kcp-glbc` workspace.
 
 ```shell
-$ ./utils/deploy.sh
+$ KUBECONFIG=.kcp/admin.kubeconfig ./utils/deploy.sh
 ```
 
 Check the deployment:
 ```shell
-$ ./bin/kubectl-kcp workspace use root:default:kcp-glbc
-$ kubectl get deployments --all-namespaces
+$ kubectl get deployments -A
 NAMESPACE      NAME                          READY   UP-TO-DATE   AVAILABLE   AGE
-cert-manager   cert-manager                  1/1     1            1           30m
-kcp-glbc       kcp-glbc-controller-manager   1/1     1            1           11s
+cert-manager   cert-manager                  0/1     0            0           17m
+kcp-glbc       kcp-glbc-controller-manager   0/1     0            0           76s
 ```
 
 It's not currently possible to check the logs via KCP, but you can view them by accessing the deployment on the kind cluster directly: 
 
 ```shell
-$ kubectl --kubeconfig ~/.kube/config --context kind-kcp-cluster-glbc-control logs -f deployments/kcp-glbc-controller-manager -n kcp89b5fd4ba9405ee7b18d0da859ce7420d36926bac4a97e01af5c244a               
+$ namespace=$(kubectl --context kind-kcp-cluster-glbc-control get deployments --all-namespaces | grep -e kcp-glbc-controller-manager | awk '{print $1 }')
+$ kubectl --kubeconfig ~/.kube/config --context kind-kcp-cluster-glbc-control logs -f deployments/kcp-glbc-controller-manager -n $namespace               
 2022-06-20T09:59:47.622Z INFO runtime/proc.go:255 Creating TLS certificate provider {"issuer": "glbc-ca"}
 ....
 ```
@@ -161,8 +108,26 @@ Test the deployment using the sample service.
 
 ```shell
 $ export KUBECONFIG=.kcp/admin.kubeconfig
-$ ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
-Current workspace is "root:default:kcp-glbc-user".
+````
+
+Move into your home workspace
+```shell
+$ ./bin/kubectl-kcp ws
+Current workspace is "root:users:zu:yc:kcp-admin".
+Note: 'kubectl ws' now matches 'cd' semantics: go to home workspace. 'kubectl ws -' to go back. 'kubectl ws .' to print current workspace.
+```
+
+Create kubernetes and glbc APIBindings
+```shell
+$ kubectl apply -f config/deploy/local/kcp-glbc/apiexports/root-kuadrant-kubernetes-apibinding.yaml
+apibinding.apis.kcp.dev/kubernetes created
+$ kubectl apply -f config/deploy/local/kcp-glbc/apiexports/root-kuadrant-glbc-apibinding.yaml 
+apibinding.apis.kcp.dev/glbc created
+```
+
+Deploy the echo service
+
+```shell
 $ kubectl apply -f samples/echo-service/echo.yaml
 service/httpecho-both created
 deployment.apps/echo-deployment created
@@ -171,35 +136,39 @@ ingress.networking.k8s.io/ingress-nondomain created
 
 Check the deployment:
 ```shell
-$ kubectl get deployments --all-namespaces
+$ kubectl get deployments -A
 NAMESPACE   NAME              READY   UP-TO-DATE   AVAILABLE   AGE
-default     echo-deployment   1/1     1            1           48s
+default     echo-deployment   0/1     0            0           31s
 ```
 
 Check what cluster was selected for the deployment:
 
 ```shell
-$ kubectl get ns default -o json | jq .metadata.annotations
+$ kubectl get deployment echo-deployment -n default -o json | jq .metadata.labels
 {
-  "internal.scheduling.kcp.dev/negotiation-workspace": "root:default:kcp-glbc-user-compute",
-  "scheduling.kcp.dev/placement": "{\"root:default:kcp-glbc-user-compute+location-1+kcp-cluster-1\":\"Pending\"}"
+  "claimed.internal.apis.kcp.dev/23927525fc377edc1b0d643c368ef3e53": "23927525fc377edc1b0d643c368ef3e53f085ab6362ce2e608fc0552",
+  "state.workload.kcp.dev/aSmDOEWMWf6IEqrPjoUAOgn0XNeFUa05deJjLB": "Sync"
 }
-$ kubectl get ns default -o json | jq .metadata.labels
-{
-  "kubernetes.io/metadata.name": "default",
-  "state.internal.workload.kcp.dev/kcp-cluster-1": "Sync"
-}
+$ ./bin/kubectl-kcp ws root:kuadrant
+Current workspace is "root:kuadrant" (type "root:universal").
+$ kubectl get synctargets -o wide
+NAME            LOCATION        READY   SYNCED API RESOURCES   KEY                                      AGE
+glbc            glbc            True                           832Kocbfr9pZCD62hs7bt3No2aylrt9lYwTJYa   36m
+kcp-cluster-1   kcp-cluster-1   True                           aSmDOEWMWf6IEqrPjoUAOgn0XNeFUa05deJjLB   34m
+kcp-cluster-2   kcp-cluster-2   True                           9o7VjBmvhoDPLl1txc7N6EaXcWyU5oxorBOXdp   34m
 ```
+
+Use the "state.workload.kcp.dev/${SYNCTARGET KEY}" label to figure out what synctarget is being used. kcp-cluster-1 in this case.
 
 Check the logs:
 
 ```shell
 $ kubectl --kubeconfig ~/.kube/config --context kind-kcp-cluster-1 get deployments --all-namespaces | grep echo
-kcp02ae827aeeb1782e217a0044068ee76384484349fc4a75242b133c52       echo-deployment            1/1     1            1           6m35s
+kcp-yj9ujet4lw2h                    echo-deployment                     1/1     1            1           6m4s
 ```
 
 ```shell
-$ kubectl --kubeconfig ~/.kube/config --context kind-kcp-cluster-1 logs -f deployments/echo-deployment -n kcp02ae827aeeb1782e217a0044068ee76384484349fc4a75242b133c52
+$ kubectl --kubeconfig ~/.kube/config --context kind-kcp-cluster-1 logs -f deployments/echo-deployment -n kcp-yj9ujet4lw2h
 Echo server listening on port 8080.
 ```
 N.B. Make sure you run this command using the correct kubeconfig i.e., Not the KCP one, and set the context to the selected cluster.

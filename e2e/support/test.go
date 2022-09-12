@@ -40,7 +40,7 @@ type Test interface {
 	NewTestWorkspace() *tenancyv1alpha1.ClusterWorkspace
 	NewAPIBinding(name string, options ...Option) *apisv1alpha1.APIBinding
 	NewTestNamespace(...Option) *corev1.Namespace
-	NewWorkloadCluster(name string, options ...Option) *workloadv1alpha1.WorkloadCluster
+	NewSyncTarget(name string, options ...Option) *workloadv1alpha1.SyncTarget
 }
 
 type Option interface {
@@ -102,6 +102,7 @@ func (t *T) NewTestWorkspace() *tenancyv1alpha1.ClusterWorkspace {
 	t.T().Cleanup(func() {
 		deleteTestWorkspace(t, workspace)
 	})
+	t.T().Logf("Creating workspace %v:%v", TestOrganization, workspace.Name)
 	t.Eventually(Workspace(t, workspace.Name)).Should(gomega.WithTransform(
 		ConditionStatus(tenancyv1alpha1.WorkspaceScheduled),
 		gomega.Equal(corev1.ConditionTrue),
@@ -121,10 +122,10 @@ func (t *T) NewTestNamespace(options ...Option) *corev1.Namespace {
 	return namespace
 }
 
-func (t *T) NewWorkloadCluster(name string, options ...Option) *workloadv1alpha1.WorkloadCluster {
-	workloadCluster, cleanup := createWorkloadCluster(t, name, options...)
+func (t *T) NewSyncTarget(name string, options ...Option) *workloadv1alpha1.SyncTarget {
+	workloadCluster, cleanup := createSyncTarget(t, name, options...)
 	t.T().Cleanup(func() {
-		deleteWorkloadCluster(t, workloadCluster)
+		deleteSyncTarget(t, workloadCluster)
 	})
 	t.T().Cleanup(func() {
 		t.Expect(cleanup()).To(gomega.Succeed())

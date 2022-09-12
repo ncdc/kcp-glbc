@@ -1,0 +1,14 @@
+apiVersion: scheduling.kcp.dev/v1alpha1
+kind: Placement
+metadata:
+  name: placement-1
+spec:
+  locationSelectors:
+    - matchLabels:
+        kuadrant.dev/location: kcp-location-1
+  locationResource:
+    group: workload.kcp.dev
+    resource: synctargets
+    version: v1alpha1
+  namespaceSelector: {}
+  locationWorkspace: root:kuadrant

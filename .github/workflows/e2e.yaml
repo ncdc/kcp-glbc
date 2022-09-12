@@ -65,32 +65,38 @@ jobs:
       - name: Set Go
         uses: actions/setup-go@v2
         with:
-          go-version: v1.17
+          go-version: v1.18
+      - name: Get Kind version
+        run: |
+          KIND_VERSION=$(cat Makefile | grep "KIND_VERSION ?=" | awk '{print $3}')
+          echo "KIND_VERSION=${KIND_VERSION}" >> $GITHUB_ENV
+          echo ${KIND_VERSION}
       - name: Kubernetes KinD GLBC Cluster
         uses: helm/kind-action@v1.2.0
         with:
-          cluster_name: glbc
+          cluster_name: kcp-cluster-glbc-control
           node_image: kindest/node:v1.21.1@sha256:fae9a58f17f18f06aeac9772ca8b5ac680ebbed985e266f711d936e91d113bad
-          version: v0.11.0
+          version: ${{ env.KIND_VERSION }}
+          config: ./e2e/kind.yaml
       - name: Kubernetes KinD Cluster 1
         uses: helm/kind-action@v1.2.0
         with:
           cluster_name: kcp-cluster-1
           node_image: kindest/node:v1.21.1@sha256:fae9a58f17f18f06aeac9772ca8b5ac680ebbed985e266f711d936e91d113bad
-          version: v0.11.0
+          version: ${{ env.KIND_VERSION }}
           config: ./e2e/kind.yaml
       - name: Kubernetes KinD Cluster 2
         uses: helm/kind-action@v1.2.0
         with:
           cluster_name: kcp-cluster-2
           node_image: kindest/node:v1.21.1@sha256:fae9a58f17f18f06aeac9772ca8b5ac680ebbed985e266f711d936e91d113bad
-          version: v0.11.0
+          version: ${{ env.KIND_VERSION }}
           config: ./e2e/kind.yaml
       - name: Info
         run: |
           echo "GLBC cluster:"
-          kubectl --context kind-glbc cluster-info
-          kubectl --context kind-glbc describe nodes
+          kubectl --context kind-kcp-cluster-glbc-control cluster-info
+          kubectl --context kind-kcp-cluster-glbc-control describe nodes
 
           echo "Cluster 1:"
           kubectl --context kind-kcp-cluster-1 cluster-info
@@ -108,78 +114,113 @@ jobs:
           make build
 
           TEMP_DIR="$(pwd)/tmp"
+          mkdir -p "${TEMP_DIR}"
 
-          CLUSTERS_KUBECONFIG_DIR="${TEMP_DIR}"
-          mkdir -p "${CLUSTERS_KUBECONFIG_DIR}"
-          echo "CLUSTERS_KUBECONFIG_DIR=${CLUSTERS_KUBECONFIG_DIR}" >> $GITHUB_ENV
-          echo "Creating Cluster manifests in directory ${CLUSTERS_KUBECONFIG_DIR}"
-          kind get kubeconfig --name=kcp-cluster-1 > "${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-1.kubeconfig
-          kind get kubeconfig --name=kcp-cluster-2 > "${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-2.kubeconfig
+          make kustomize
 
           echo "Deploying Ingress controller to KinD workload clusters"
-          VERSION=$(curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/stable.txt)
+          VERSION=controller-v1.2.1
 
           kubectl config use-context kind-kcp-cluster-1
           curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
           kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
+          kubectl -n ingress-nginx wait --timeout=300s --for=condition=Available deployments --all
 
           kubectl config use-context kind-kcp-cluster-2
           curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
           kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
+          kubectl -n ingress-nginx wait --timeout=300s --for=condition=Available deployments --all
 
-          echo "Deploying cert-manager to GLBC control cluster"
-          kubectl config use-context kind-glbc
-          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
-          kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
+          kubectl config use-context kind-kcp-cluster-glbc-control
+          curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
+          kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
+          kubectl -n ingress-nginx wait --timeout=300s --for=condition=Available deployments --all
 
           KCP_LOG_FILE="${TEMP_DIR}"/kcp.log
           echo "KCP_LOG_FILE=${KCP_LOG_FILE}" >> $GITHUB_ENV
           echo "Starting KCP, sending logs to ${KCP_LOG_FILE}"
-          ./bin/kcp start --discovery-poll-interval 3s --run-controllers > ${KCP_LOG_FILE} 2>&1 &
+          ./bin/kcp start --run-controllers > ${KCP_LOG_FILE} 2>&1 &
           KCP_PID=$!
           echo "KCP_PID=${KCP_PID}" >> $GITHUB_ENV
 
-          echo "Waiting 15 seconds..."
-          sleep 15
+          echo "Waiting 30 seconds..."
+          sleep 30
 
           if ! ps -p ${KCP_PID}; then
             echo "KCP failed to start, see ${KCP_LOG_FILE} for info."
             exit 1
           fi
 
-          export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig
-          echo "Exporting KUBECONFIG=${KUBECONFIG}"
-          echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
+          GLBC_DEPLOYMENTS_DIR=config/deploy
+          KUSTOMIZATION_DIR=${GLBC_DEPLOYMENTS_DIR}/local
+          SYNC_TARGETS_DIR=${GLBC_DEPLOYMENTS_DIR}/sync-targets
 
-          echo "Creating Compute Service Workspace"
-          ./bin/kubectl-kcp workspace create kcp-glbc-user-compute --enter
-          kubectl create ns kcp-syncer
-          export KCP_SYNCER_IMAGE=ghcr.io/kcp-dev/kcp/syncer:release-0.5
-          ./bin/kubectl-kcp workload sync kcp-cluster-1 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services | kubectl --kubeconfig="${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-1.kubeconfig apply -f -
-          ./bin/kubectl-kcp workload sync kcp-cluster-2 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services | kubectl --kubeconfig="${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-2.kubeconfig apply -f -
+          KUBECONFIG=.kcp/admin.kubeconfig ./bin/kubectl-kcp workspace use "root"
+          KUBECONFIG=.kcp/admin.kubeconfig ./bin/kubectl-kcp workspace create "kuadrant" --type universal --enter
 
-          echo "Creating GLBC Workspace"
-          ./bin/kubectl-kcp workspace ..
-          ./bin/kubectl-kcp workspace create kcp-glbc --enter
+          echo "Setup workspace root:kuadrant"
+          KUBECONFIG=.kcp/admin.kubeconfig ./utils/deploy.sh -k ${KUSTOMIZATION_DIR} -c "none"
 
-          echo "Waiting 15 seconds..."
-          sleep 15
+          echo "Applying syncer to the GLBC physical cluster"
+          kubectl config use-context kind-kcp-cluster-glbc-control
+          kubectl apply -f ${SYNC_TARGETS_DIR}/glbc-syncer.yaml
 
-          echo "Register K8s APIs"
-          kubectl apply -f ./utils/kcp-contrib/crds
+          echo "Checking glbc synctarget is ready"
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl wait --timeout=300s --for=condition=Ready=true synctargets "glbc"
 
-          echo "Export GLBC APIs"
-          kubectl apply -f ./utils/kcp-contrib/apiresourceschema.yaml
-          kubectl apply -f ./utils/kcp-contrib/apiexport.yaml
+          echo "Create User sync targets"
+          export KCP_SYNCER_IMAGE=ghcr.io/kcp-dev/kcp/syncer:release-0.7
+          KUBECONFIG=.kcp/admin.kubeconfig ./bin/kubectl-kcp workload sync kcp-cluster-1 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${SYNC_TARGETS_DIR}/kcp-cluster-1-syncer.yaml
+          KUBECONFIG=.kcp/admin.kubeconfig ./bin/kubectl-kcp workload sync kcp-cluster-2 --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${SYNC_TARGETS_DIR}/kcp-cluster-2-syncer.yaml
+
+          echo "Enabling advanced scheduling on user sync targets"
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl annotate --overwrite synctarget kcp-cluster-1 featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl annotate --overwrite synctarget kcp-cluster-2 featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+
+          echo "Applying syncers to the user physical clusters"
+          kubectl --context kind-kcp-cluster-1 apply -f ${SYNC_TARGETS_DIR}/kcp-cluster-1-syncer.yaml
+          kubectl --context kind-kcp-cluster-2 apply -f ${SYNC_TARGETS_DIR}/kcp-cluster-2-syncer.yaml
+
+          echo "Checking all user synctargets are ready"
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl wait --timeout=300s --for=condition=Ready=true synctargets kcp-cluster-1 kcp-cluster-2
+
+          echo "Check synctarget status and labels"
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get synctargets -o wide --show-labels
+
+          echo "Check synctarget annotations"
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get synctargets glbc -o json | jq .metadata.annotations
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get synctargets kcp-cluster-1 -o json | jq .metadata.annotations
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get synctargets kcp-cluster-2 -o json | jq .metadata.annotations
+
+          echo "Create the GLBC APIExport after all the clusters have synced and deploy GLBC components (cert-manager)"
+          KUBECONFIG=.kcp/admin.kubeconfig ./utils/deploy.sh -k ${KUSTOMIZATION_DIR} -c "cert-manager"
+
+          echo "Create the kcp-glbc namespace, kcp-glbc-controller-manager service account and generate a kubeconfig for access"
+          KUBECONFIG=.kcp/admin.kubeconfig ./utils/create_glbc_kubeconfig.sh -o ${TEMP_DIR}/kcp.kubeconfig
+
+          echo "Check GLBC APIExport and APIBinding"
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexports "glbc-root-kuadrant" -o json > glbc-root-kuadrant-apiexport.json
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl get apibindings glbc -o json > glbc-root-kuadrant-apibinding.json
+
+          cat glbc-root-kuadrant-apiexport.json
+          cat glbc-root-kuadrant-apibinding.json
+
+          glbcurl=$(KUBECONFIG=.kcp/admin.kubeconfig kubectl get apiexport glbc-root-kuadrant -o json | jq -r .status.virtualWorkspaces[0].url)
+          echo ${glbcurl}
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl --server ${glbcurl}/clusters/* api-resources
+
+          echo "Create the default glbc-ca issuer"
+          go run ./utils/certman-issuer/ --output-file ${TEMP_DIR}/issuer.yaml
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl apply -n kcp-glbc -f ${TEMP_DIR}/issuer.yaml
+
+          echo "Export GLBC CI Cluster Config Enviornment"
+          export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs)
 
           GLBC_LOG_FILE="${TEMP_DIR}"/glbc.log
           echo "GLBC_LOG_FILE=${GLBC_LOG_FILE}" >> $GITHUB_ENV
-          export AWS_DNS_PUBLIC_ZONE_ID=FAKE_ZONE_ID
-          echo "AWS_DNS_PUBLIC_ZONE_ID=FAKE_ZONE_ID" >> $GITHUB_ENV
+
           echo "Starting GLBC, sending logs to ${GLBC_LOG_FILE}"
-          unset KUBECONFIG
-          kubectl config use-context kind-glbc
-          ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --dns-provider fake --glbc-tls-provided true > ${GLBC_LOG_FILE} 2>&1 &
+          KUBECONFIG=${TEMP_DIR}/kcp.kubeconfig ./bin/kcp-glbc --zap-log-level=3 > ${GLBC_LOG_FILE} 2>&1 &
           GLBC_PID=$!
           echo "GLBC_PID=${GLBC_PID}" >> $GITHUB_ENV
 
@@ -190,14 +231,48 @@ jobs:
             echo "GLBC failed to start, see ${GLBC_LOG_FILE} for info."
             exit 1
           fi
+
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl label namespace default experimental.workload.kcp.dev/scheduling-disabled="true"
+          KUBECONFIG=.kcp/admin.kubeconfig kubectl annotate namespace default scheduling.kcp.dev/placement-
+
       - name: Run e2e tests
         run: |
-          export KUBECONFIG=${{ env.KUBECONFIG }}
-          export CLUSTERS_KUBECONFIG_DIR=${{ env.CLUSTERS_KUBECONFIG_DIR }}
-          export AWS_DNS_PUBLIC_ZONE_ID=${{ env.AWS_DNS_PUBLIC_ZONE_ID }}
+          export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig
+          echo "Exporting KUBECONFIG=${KUBECONFIG}"
+
+          export CLUSTERS_KUBECONFIG_DIR="$(pwd)/tmp"
+          mkdir -p "${CLUSTERS_KUBECONFIG_DIR}"
+          echo "Exporting CLUSTERS_KUBECONFIG_DIR=${CLUSTERS_KUBECONFIG_DIR}"
+
+          echo "Export GLBC CI Cluster Config Enviornment"
+          export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs)
+
+          echo "Creating cluster kubeconfigs in ${CLUSTERS_KUBECONFIG_DIR}"
+          kind get kubeconfig --name=kcp-cluster-1 > "${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-1.kubeconfig
+          kind get kubeconfig --name=kcp-cluster-2 > "${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-2.kubeconfig
+          kind get kubeconfig --name=kcp-cluster-glbc-control > "${CLUSTERS_KUBECONFIG_DIR}"/kcp-cluster-glbc-control.kubeconfig
 
           # Then run e2e tests
           make e2e
+      - name: Run performance tests
+        env:
+          TEST_DNSRECORD_COUNT: 1
+          TEST_INGRESS_COUNT: 1
+        run: |
+          # Note: This doesn't really apply much load, but we run it here to ensure the tests are run on PRs
+          export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig
+          echo "Exporting KUBECONFIG=${KUBECONFIG}"
+
+          echo "Export GLBC CI Cluster Config Enviornment"
+          export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs)
+
+          echo "TEST_INGRESS_COUNT = ${{ env.TEST_INGRESS_COUNT }}"
+          echo "TEST_DNSRECORD_COUNT = ${{ env.TEST_DNSRECORD_COUNT }}"
+
+          kubectl config get-contexts
+
+          # Then run performance tests
+          make performance
       - name: Verify generated metrics documentation
         run: |
           make verify-gen-metrics-docs

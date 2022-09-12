@@ -5,7 +5,7 @@ package v1
 import (
 	"net/http"
 
-	logicalcluster "github.com/kcp-dev/logicalcluster"
+	v2 "github.com/kcp-dev/logicalcluster/v2"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
@@ -14,16 +14,21 @@ import (
 type KuadrantV1Interface interface {
 	RESTClient() rest.Interface
 	DNSRecordsGetter
+	DomainVerificationsGetter
 }
 
 // KuadrantV1Client is used to interact with features provided by the kuadrant.dev group.
 type KuadrantV1Client struct {
 	restClient rest.Interface
-	cluster    logicalcluster.Name
+	cluster    v2.Name
 }
 
 func (c *KuadrantV1Client) DNSRecords(namespace string) DNSRecordInterface {
 	return newDNSRecords(c, namespace)
+}
+
+func (c *KuadrantV1Client) DomainVerifications() DomainVerificationInterface {
+	return newDomainVerifications(c)
 }
 
 // NewForConfig creates a new KuadrantV1Client for the given config.
@@ -71,7 +76,7 @@ func New(c rest.Interface) *KuadrantV1Client {
 }
 
 // NewWithCluster creates a new KuadrantV1Client for the given RESTClient and cluster.
-func NewWithCluster(c rest.Interface, cluster logicalcluster.Name) *KuadrantV1Client {
+func NewWithCluster(c rest.Interface, cluster v2.Name) *KuadrantV1Client {
 	return &KuadrantV1Client{restClient: c, cluster: cluster}
 }
 

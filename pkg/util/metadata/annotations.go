@@ -1,8 +1,41 @@
 package metadata
 
 import (
+	"strings"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func GetAnnotation(obj metav1.Object, key string) string {
+	if !HasAnnotation(obj, key) {
+		return ""
+	}
+	return obj.GetAnnotations()[key]
+}
+
+func HasAnnotation(obj metav1.Object, key string) bool {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+	_, ok := annotations[strings.TrimSpace(key)]
+	return ok
+}
+
+func HasAnnotationsContaining(obj metav1.Object, key string) (bool, map[string]string) {
+	matches := map[string]string{}
+	Annotations := obj.GetAnnotations()
+	if Annotations == nil {
+		return false, matches
+	}
+
+	for k, annotation := range Annotations {
+		if strings.Contains(k, key) {
+			matches[k] = annotation
+		}
+	}
+	return len(matches) > 0, matches
+}
 
 func AddAnnotation(obj metav1.Object, key, value string) {
 	annotations := obj.GetAnnotations()

@@ -22,7 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/kcp-dev/logicalcluster"
+	"github.com/kcp-dev/logicalcluster/v2"
 )
 
 func GetServices(t Test, namespace *corev1.Namespace, labelSelector string) []corev1.Service {

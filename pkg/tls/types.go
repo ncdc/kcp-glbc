@@ -17,23 +17,30 @@ package tls
 import (
 	"context"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
-const tlsIssuerAnnotation = "kuadrant.dev/tls-issuer"
+const TlsIssuerAnnotation = "kuadrant.dev/tls-issuer"
 
 type Provider interface {
 	IssuerID() string
 	Domains() []string
 	Create(ctx context.Context, cr CertificateRequest) error
 	Delete(ctx context.Context, cr CertificateRequest) error
-	Initialize(ctx context.Context) error
+	Update(ctx context.Context, cr CertificateRequest) error
+	GetCertificateSecret(ctx context.Context, cr CertificateRequest) (*v1.Secret, error)
+	GetCertificate(ctx context.Context, cr CertificateRequest) (*certman.Certificate, error)
+	GetCertificateStatus(ctx context.Context, certReq CertificateRequest) (CertStatus, error)
+	IssuerExists(ctx context.Context) (bool, error)
 }
 
-type CertificateRequest interface {
-	Name() string
-	CreationTimestamp() metav1.Time
-	Labels() map[string]string
-	Annotations() map[string]string
-	Host() string
+type CertificateRequest struct {
+	Name             string
+	Labels           map[string]string
+	Annotations      map[string]string
+	Host             string
+	cleanUpFinalizer bool
 }
+
+type CertStatus string

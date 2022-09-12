@@ -1,9 +1,9 @@
 [[monitoring]]
 = KCP GLBC Monitoring
 
-The KCP GLBC monitoring architecture relies on https://prometheus.io[Prometheus] and the eponymous operator.
+The KCP GLBC monitoring architecture relies on https://prometheus.io[Prometheus], https://prometheus.io/docs/alerting/latest/alertmanager/[Alertmanager] and https://grafana.com/[Grafana].
 
-The https://prometheus-operator.dev[Prometheus operator] serves to make running Prometheus on top of Kubernetes as easy as possible, while preserving Kubernetes-native configuration options.
+The https://prometheus-operator.dev[Prometheus operator] serves to make running Prometheus on top of Kubernetes as easy as possible, while preserving Kubernetes-native configuration options. However, because Openshift clusters include an instance of the prometheus operator already for cluster monitoring, a different approach is used for Kubernetes vs. Openshift.
 
 [[prerequisites]]
 == Prerequisites
@@ -13,33 +13,7 @@ To take full advantage of the KCP GLBC monitoring capabilities, it is recommende
 [[kubernetes]]
 === Kubernetes
 
-The easiest way to get started with the Prometheus operator is by deploying it as part of https://github.com/prometheus-operator/kube-prometheus[kube-prometheus], which provisions an entire monitoring stack.
-You can follow the https://prometheus-operator.dev/docs/prologue/quick-start/[quickstart] from the Prometheus operator https://prometheus-operator.dev/[documentation].
-
-Alternatively, you can quickly deploy the Prometheus operator by running:
-
-[source,console]
-----
-$ kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/bundle.yaml
-----
-
-WARNING: Beware this installs the operator in the `default` namespace. You must download the file locally and replace the `namespace` fields to deploy the resources into another namespace. This also installs the version from the `main` branch, which you can change in the URL by choosing a stable release version.
-
-Then, you can create a Prometheus resource, that the operator will use as configuration to deploy a managed Prometheus instance:
-
-[source,console]
-----
-$ cat <<EOF | kubectl apply -f -
-apiVersion: monitoring.coreos.com/v1
-kind: Prometheus
-metadata:
-  name: prometheus
-spec:
-  podMonitorSelector:
-    matchLabels:
-      app.kubernetes.io/name: kcp-glbc
-EOF
-----
+The easiest way to get started with the Prometheus operator is by deploying it as part of https://github.com/prometheus-operator/kube-prometheus[kube-prometheus], which provisions an entire monitoring stack (including Alertmanager and Grafana).
 
 By default, the Prometheus instance discovers applications to be monitored in the same namespace.
 You can use the `podMonitorNamespaceSelector` field from the Prometheus resource to enable cross-namespace monitoring.
@@ -48,50 +22,12 @@ You may also need to specify a ServiceAccount with the `serviceAccountName` fiel
 [[openshift]]
 === OpenShift
 
-Starting OpenShift 4.3, the Prometheus Operator, that's already deployed as part of the monitoring stack, can be used to https://docs.openshift.com/container-platform/4.3/monitoring/monitoring-your-own-services.html[monitor application services].
-This needs to be enabled by following these instructions:
+This guide assumes a Managed Openshift cluster is being used e.g. Openshift Dedicated. If using a self managed installation of Openshift (OCP), this guide is still relevant. However, you may want to use https://docs.openshift.com/container-platform/4.3/monitoring/monitoring-your-own-services.html[user workload monitoring and alerting] with OCP as it is easier to set up and configure.
+For Managed Openshift, user workload monitoring has some limitations at this time. The main ones are inability to use https://docs.openshift.com/dedicated/osd_cluster_admin/osd_monitoring/osd-managing-alerts.html[alerts] or add custom grafana dashboards to the bundled monitoring stack. 
 
-. Check whether the `cluster-monitoring-config` ConfigMap object exists in the `openshift-monitoring` project:
+A suggested approach here is to install the https://github.com/redhat-developer/observability-operator[observability operator], which deploys its own instance of prometheus, prometheus-operator, alertmanager and grafana. This isn't ideal as there is a risk of prometheus-operator CRDs having conflicts with the cluster monitoring stack. However, the prometheus-operator CRDs are relatively stable. It's should be a reasonable stopgap until a better approach is available (such as user defined alerts in Managed Openshift). The observability operator instance of prometheus is smart enough to configure a subset of metrics to federate from the cluster prometheus. This can be useful if you want to use metrics from kube-state or node-exporter.
 
-  $ oc -n openshift-monitoring edit configmap cluster-monitoring-config
-
-. If it does not exist, create it:
-
-  $ oc -n openshift-monitoring create configmap cluster-monitoring-config
-
-. Start editing the `cluster-monitoring-config` ConfigMap:
-
-  $ oc -n openshift-monitoring edit configmap cluster-monitoring-config
-
-. Set the `enableUserWorkload` setting to `true` under `data/config.yaml`:
-+
-[source,yaml]
-----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cluster-monitoring-config
-  namespace: openshift-monitoring
-data:
-  config.yaml: |
-    enableUserWorkload: true
-----
-Note that, in OpenShift versions from 4.3 to 4.5, the configuration is as following:
-+
-[source,yaml]
-----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cluster-monitoring-config
-  namespace: openshift-monitoring
-data:
-  config.yaml: |
-    techPreviewUserWorkload:
-      enabled: true
-----
-
-On OpenShift versions prior to 4.3, or if you do not want to change your cluster monitoring stack configuration, you can refer to the <<Kubernetes>> section in order to deploy a separate Prometheus operator instance.
+There is an example of installing the observability operator included in the Makefile.
 
 [[discovery]]
 == Discovery

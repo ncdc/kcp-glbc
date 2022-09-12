@@ -34,13 +34,13 @@
 # "v1.22.7"
 # $ kubectl --context kind-kcp-cluster-2 version -o json | jq .serverVersion.gitVersion
 # "v1.22.7"
-# $ kubectl get workloadclusters -o wide
+# $ kubectl get synctargets -o wide
 # NAME              LOCATION          READY   SYNCED API RESOURCES
 # glbc              glbc              True
 # kcp-cluster-crc   kcp-cluster-crc   True
 # kubectl get locations
 # NAME         RESOURCE           AVAILABLE   INSTANCES   LABELS
-# location-1   workloadclusters   2           2
+# location-1   synctargets   2           2
 
 set -e pipefail
 
@@ -48,13 +48,12 @@ TEMP_DIR="./tmp"
 CRC_CLUSTER_NAME=kcp-cluster-crc
 CRC_KUBECONFIG="${CRC_CLUSTER_NAME}.kubeconfig"
 PULL_SECRET=~/pull-secret
+KUBECONFIG_KCP_ADMIN=.kcp/admin.kubeconfig
 
 KUBECTL_KCP_BIN="./bin/kubectl-kcp"
 
-: ${KCP_VERSION:="release-0.5"}
+: ${KCP_VERSION:="release-0.8"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
-
-crc config set enable-cluster-monitoring true
 
 crc start -p $PULL_SECRET
 
@@ -62,6 +61,32 @@ cp ~/.crc/machines/crc/kubeconfig ${TEMP_DIR}/${CRC_KUBECONFIG}
 cp ${TEMP_DIR}/${CRC_KUBECONFIG} ${TEMP_DIR}/${CRC_KUBECONFIG}.internal
 
 echo "Registering crc cluster into KCP"
-KUBECONFIG=config/deploy/local/kcp.kubeconfig ./bin/kubectl-kcp workspace use root:default:kcp-glbc-compute
-KUBECONFIG=config/deploy/local/kcp.kubeconfig ${KUBECTL_KCP_BIN} workload sync ${CRC_CLUSTER_NAME} --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services > ${TEMP_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ./bin/kubectl-kcp ws root:kuadrant
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workload sync ${CRC_CLUSTER_NAME} --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${TEMP_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
 kubectl --context crc-admin apply -f ${TEMP_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
+
+# TODO: Figure out the right order of cmds, kubeconfig, context & env vars to deploy the observability operator
+# Notes from installing manually on a managed openshift cluster:
+#
+# Create and set values for the observability secret env file.
+# The default respoitory location is https://github.com/Kuadrant/kcp-glbc/tree/main/config/observability/openshift/monitoring_resources.
+# An index.json config file is read in by the observability operator from there.
+# ```
+# cp config/observability/openshift/observability-operator.env.template config/observability/openshift/observability-operator.env
+# vi config/observability/openshift/observability-operator.env
+# ```
+# Create the various operator resources
+# ```
+# ./bin/kustomize build config/observability/openshift/ | oc apply -f -
+# # This will fail to create the Observability resource the first time, but will create other operator resources
+# ```
+# Wait for the operator to be running, which usually means the CRD is registered
+# ```
+# oc wait --for=condition=available --timeout=120s -n observability-operator deployment/observability-operator-controller-manager
+# ./bin/kustomize build config/observability/openshift/ | oc apply -f -
+# ```
+# Monitoring resources (GrafanaDashboards, PodMonitors etc..) are periodically checked for updates in git.
+# The resyncPeriod in the Observability resource defaults to 1h.
+#
+echo "Install observability operator"
+echo "TODO"

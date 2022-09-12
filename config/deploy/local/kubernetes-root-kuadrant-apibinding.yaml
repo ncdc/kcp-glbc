@@ -1,0 +1,10 @@
+apiVersion: apis.kcp.dev/v1alpha1
+kind: APIBinding
+metadata:
+  annotations: {}
+  name: kubernetes
+spec:
+  reference:
+    workspace:
+      exportName: kubernetes
+      path: root:kuadrant

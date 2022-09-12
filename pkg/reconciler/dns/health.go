@@ -12,9 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	"github.com/kuadrant/kcp-glbc/pkg/cluster"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
 )
+
+const ANNOTATION_HEALTH_CHECK_PREFIX = "kuadrant.experimental/health-"
 
 // healthChecksConfig represents the user configuration for the health checks
 type healthChecksConfig struct {
@@ -140,12 +141,12 @@ func configFromAnnotations(annotations map[string]string) (*healthChecksConfig, 
 
 	for k, v := range annotations {
 		// The annotation is not for the health check. Skip it
-		if !strings.HasPrefix(k, cluster.ANNOTATION_HEALTH_CHECK_PREFIX) {
+		if !strings.HasPrefix(k, ANNOTATION_HEALTH_CHECK_PREFIX) {
 			continue
 		}
 
 		// Get the configuration key
-		field := strings.TrimPrefix(k, cluster.ANNOTATION_HEALTH_CHECK_PREFIX)
+		field := strings.TrimPrefix(k, ANNOTATION_HEALTH_CHECK_PREFIX)
 
 		// Get the set value function for the configuration key
 		setValue, ok := annotationsConfigMap[field]

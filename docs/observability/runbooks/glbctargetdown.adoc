@@ -1,0 +1,57 @@
+// begin header
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+:numbered:
+:toc: macro
+:toc-title: pass:[<b>Table of Contents</b>]
+// end header
+= GLBCTargetDown
+
+toc::[]
+
+== Description
+
+The source of the alert is the `up` metric. It fires when the prometheus target for the GLBC is failing to be scraped.
+When this alert fires, it usually means the GLBC component is not running, metrics is misconfigured, or the metrics endpoint is not responding.
+
+== Prerequisites
+
+// Include the following steps in every alert SOP
+* Access to the physical cluster where GLBC should be running
+
+== Execute/Resolution
+
+// Include this as the first step in every alert SOP
+. Check the GLBC component & namespace for indications of problems.
++
+[source,sh]
+----
+kubectl logs deployment/kcp-glbc-controller-manager
+kubectl get events
+----
+. Based on logs or events you may need to kill the pod to get it into a good state again, or troubleshoot any errors (GLBC or K8S).
+. If GBLC is running OK, check for metrics configuration issues.
++
+[source,sh]
+----
+kubectl get podmonitors kcp-glbc-controller-manager -o yaml
+----
+. Verify the `podMetricsEndpoints` corresponds to a port on the GLBC pod.
+. Verify the `selector` matches the GLBC pod.
+. Check Prometheus Operator logs for any errors. The monitoring namespace may be different depending on the observability stack installed.
++
+[source,sh]
+----
+kubectl logs deployment/prometheus-operator -n monitoring
+----
+
+== Validate
+
+//Include the following steps in every alert SOP
+. Check the alert is no longer firing.
+

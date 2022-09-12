@@ -3,6 +3,7 @@ namespace: kcp-glbc
 
 bases:
 - namespace.yaml
+- issuer.yaml
 - ../rbac
 - ../manager
 - ../manager/config

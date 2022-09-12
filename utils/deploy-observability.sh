@@ -22,11 +22,11 @@ source "${DEPLOY_SCRIPT_DIR}"/.startUtils
 
 set -e pipefail
 
-#Hash of root:default:kcp-glbc, this will work for all local deployments using the kcp-glbc workspace
-GLBC_NAMESPACE=kcp89b5fd4ba9405ee7b18d0da859ce7420d36926bac4a97e01af5c244a
 PROMETHEUS_NAMESPACE=monitoring
 
 kubectl config use-context kind-kcp-cluster-glbc-control
+
+GLBC_NAMESPACE=$(kubectl get deployments --all-namespaces | grep -e kcp-glbc-controller-manager | awk '{print $1 }')
 
 # Deploy monitoring stack (includes prometheus, alertmanager & grafana)
 wait_for "./bin/kustomize build config/observability/kubernetes | kubectl apply --force-conflicts  --server-side -f -" "prometheus" "2m" "10"
@@ -35,7 +35,7 @@ wait_for "./bin/kustomize build config/observability/kubernetes | kubectl apply 
 kubectl -n ${PROMETHEUS_NAMESPACE} wait --timeout=300s --for=condition=Available deployments --all
 
 # Deploy Pod Monitor for kcp-glbc
-./bin/kustomize build config/observability/kubernetes/pod_monitors | kubectl -n ${GLBC_NAMESPACE} apply -f -
+kubectl -n ${GLBC_NAMESPACE} apply -f config/observability/kubernetes/monitoring_resources/podmonitor-kcp-glbc-controller-manager.yaml
 
 # Check kcp-glbc Prometheus config
 wait_for "kubectl -n ${PROMETHEUS_NAMESPACE} get secret prometheus-k8s -o json | jq -r '.data[\"prometheus.yaml.gz\"]'| base64 -d | gunzip | grep kcp-glbc" "kcp-glbc prometheus config" "1m" "10"

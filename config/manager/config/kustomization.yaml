@@ -8,5 +8,4 @@ configMapGenerator:
   - controller-config.env
 
 secretGenerator:
-- name: kcp-kubeconfig
 - name: aws-credentials

@@ -10,7 +10,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/kcp-dev/logicalcluster"
+	"github.com/kcp-dev/logicalcluster/v2"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
@@ -21,10 +21,11 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
-const controllerName = "kcp-glbc-dns"
+const defaultControllerName = "kcp-glbc-dns"
 
 // NewController returns a new Controller which reconciles DNSRecord.
 func NewController(config *ControllerConfig) (*Controller, error) {
+	controllerName := config.GetName(defaultControllerName)
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 	c := &Controller{
 		Controller:            reconciler.NewController(controllerName, queue),
@@ -52,10 +53,25 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 	}
 	c.dnsZones = dnsZones
 
+	//Logging state of AWS credentials
+	awsIdKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	if awsIdKey != "" {
+		c.Logger.Info("AWS Access Key set")
+	} else {
+		c.Logger.Info("AWS Access Key is NOT set")
+	}
+
+	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	if awsSecretKey != "" {
+		c.Logger.Info("AWS Secret Key set")
+	} else {
+		c.Logger.Info("AWS Secret Key is NOT set")
+	}
+
 	c.sharedInformerFactory.Kuadrant().V1().DNSRecords().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) { c.Enqueue(obj) },
 		UpdateFunc: func(old, obj interface{}) {
-			if old.(*v1.DNSRecord).Generation != obj.(*v1.DNSRecord).Generation {
+			if old.(*v1.DNSRecord).ResourceVersion != obj.(*v1.DNSRecord).ResourceVersion {
 				c.Enqueue(obj)
 			}
 		},
@@ -69,6 +85,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 }
 
 type ControllerConfig struct {
+	*reconciler.ControllerConfig
 	DnsRecordClient       kuadrantv1.ClusterInterface
 	SharedInformerFactory externalversions.SharedInformerFactory
 	DNSProvider           string
@@ -85,26 +102,35 @@ type Controller struct {
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {
-	dnsRecord, exists, err := c.indexer.GetByKey(key)
+	object, exists, err := c.indexer.GetByKey(key)
 	if err != nil {
 		return err
 	}
 
 	if !exists {
-		c.Logger.Info("DNSRecord was deleted", "key", key)
 		return nil
 	}
 
-	current := dnsRecord.(*v1.DNSRecord)
-	previous := current.DeepCopy()
+	previous := object.(*v1.DNSRecord)
+	current := previous.DeepCopy()
 
 	if err = c.reconcile(ctx, current); err != nil {
 		return err
 	}
 
+	if !equality.Semantic.DeepEqual(previous.Status, current.Status) {
+		refresh, err := c.dnsRecordClient.Cluster(logicalcluster.From(current)).KuadrantV1().DNSRecords(current.Namespace).UpdateStatus(ctx, current, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+		current.ObjectMeta.ResourceVersion = refresh.ObjectMeta.ResourceVersion
+	}
+
 	if !equality.Semantic.DeepEqual(previous, current) {
 		_, err := c.dnsRecordClient.Cluster(logicalcluster.From(current)).KuadrantV1().DNSRecords(current.Namespace).Update(ctx, current, metav1.UpdateOptions{})
-		return err
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -115,10 +141,8 @@ func (c *Controller) createDNSProvider(dnsProviderName string) (dns.Provider, er
 	var dnsError error
 	switch dnsProviderName {
 	case "aws":
-		c.Logger.Info("Creating DNS provider", "provider", "aws")
 		dnsProvider, dnsError = newAWSDNSProvider()
 	default:
-		c.Logger.Info("Creating DNS provider", "provider", "fake")
 		dnsProvider = &dns.FakeProvider{}
 	}
 	return dnsProvider, dnsError

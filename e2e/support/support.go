@@ -33,10 +33,10 @@ const (
 )
 
 var (
-	TestOrganization = tenancyv1alpha1.RootCluster.Join("default")
+	TestOrganization = tenancyv1alpha1.RootCluster.Join("kuadrant")
 
-	ComputeWorkspace = TestOrganization.Join("kcp-glbc-user-compute")
-	GLBCWorkspace    = TestOrganization.Join("kcp-glbc")
+	GLBCWorkspace = TestOrganization
+	GLBCExportName = "glbc-root-kuadrant"
 
 	ApplyOptions = metav1.ApplyOptions{FieldManager: "kcp-glbc-e2e", Force: true}
 )

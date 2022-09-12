@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -95,9 +94,27 @@ func label(name, value string) *prometheus.LabelPair {
 	}
 }
 
+func hasLabels(metric *prometheus.Metric, labels ...*prometheus.LabelPair) bool {
+	for _, l := range labels {
+		if !hasLabel(metric, l) {
+			return false
+		}
+	}
+	return true
+}
+
+func hasLabel(metric *prometheus.Metric, label *prometheus.LabelPair) bool {
+	for _, l := range metric.Label {
+		if *l.Name == *label.Name && *l.Value == *label.Value {
+			return true
+		}
+	}
+	return false
+}
+
 func bucket(value float64, upperBound float64) *prometheus.Bucket {
 	var count uint64
-	if value > 0 && value <= upperBound {
+	if value >= 0 && value <= upperBound {
 		count++
 	}
 	return &prometheus.Bucket{
@@ -127,5 +144,12 @@ func uint64P(i uint64) *uint64 {
 }
 
 func float64P(f float64) *float64 {
+	return &f
+}
+
+func positiveFloat64P(f float64) *float64 {
+	if f < 0 {
+		return float64P(0)
+	}
 	return &f
 }

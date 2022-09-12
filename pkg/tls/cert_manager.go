@@ -16,22 +16,14 @@ package tls
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"fmt"
-	"math/big"
-	mathrand "math/rand"
-	"os"
 	"strings"
 	"time"
 
-	cmacme "github.com/jetstack/cert-manager/pkg/apis/acme/v1"
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
-	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned/typed/certmanager/v1"
+	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
+	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -43,32 +35,16 @@ type DNSValidator int
 
 const (
 	DNSValidatorRoute53  DNSValidator = iota
-	DefaultCertificateNS string       = "cert-manager"
+	DefaultCertificateNS string       = "kcp-glbc"
+	certFinalizer                     = "kuadrant.dev/certificates-cleanup"
 )
 
 type CertProvider string
 
-const (
-	CertProviderCA        CertProvider = "glbc-ca"
-	CertProviderLEStaging CertProvider = "letsencryptstaging"
-	CertProviderLEProd    CertProvider = "letsencryptprod"
-
-	caSecretName string = "glbc-ca"
-
-	awsSecretName      string = "route53-credentials"
-	envAwsAccessKeyID  string = "AWS_ACCESS_KEY_ID"
-	envAwsAccessSecret string = "AWS_SECRET_ACCESS_KEY"
-	envAwsZoneID       string = "AWS_DNS_PUBLIC_ZONE_ID"
-
-	envLEEmail   string = "HCG_LE_EMAIL"
-	leProdAPI    string = "https://acme-v02.api.letsencrypt.org/directory"
-	leStagingAPI string = "https://acme-staging-v02.api.letsencrypt.org/directory"
-)
-
 // certManager is a certificate provider.
 type certManager struct {
 	dnsValidationProvider DNSValidator
-	certClient            certmanclient.CertmanagerV1Interface
+	certClient            certmanclient.Interface
 	k8sClient             kubernetes.Interface
 	certProvider          CertProvider
 	LEConfig              LEConfig
@@ -83,16 +59,22 @@ type LEConfig struct {
 	Email string
 }
 
+var CertNotReadyErr = fmt.Errorf("certificate is not ready yet ")
+
+func IsCertNotReadyErr(err error) bool {
+	return err == CertNotReadyErr
+}
+
 type CertManagerConfig struct {
 	DNSValidator DNSValidator
-	CertClient   certmanclient.CertmanagerV1Interface
+	CertClient   certmanclient.Interface
 
 	CertProvider CertProvider
 	LEConfig     *LEConfig
 	Region       string
-	// client targeting the control cluster
+	// client targeting the glbc workspace cluster
 	K8sClient kubernetes.Interface
-	// namespace in the control cluster where we create certificates
+	// namespace in the control workspace where we create certificates
 	CertificateNS string
 	// set of domains we allow certs to be created for
 	ValidDomains []string
@@ -109,17 +91,6 @@ func NewCertManager(c CertManagerConfig) (*certManager, error) {
 		certificateNS:         c.CertificateNS,
 	}
 
-	switch cm.certProvider {
-
-	case CertProviderLEStaging, CertProviderLEProd:
-		if os.Getenv(envAwsAccessKeyID) == "" || os.Getenv(envAwsAccessSecret) == "" || os.Getenv(envAwsZoneID) == "" {
-			return nil, fmt.Errorf(fmt.Sprintf("certmanager is missing envars for aws %s %s %s", envAwsAccessKeyID, envAwsAccessSecret, envAwsZoneID))
-		}
-		if os.Getenv(envLEEmail) == "" {
-			return nil, fmt.Errorf("certmanager: missing env var %s", envLEEmail)
-		}
-	}
-
 	return cm, nil
 }
 
@@ -131,72 +102,98 @@ func (cm *certManager) Domains() []string {
 	return cm.validDomains
 }
 
-// Initialize will configure the issuer and aws access secret.
-// TODO this should probably be in a controller for a GLBC CRD, or externalized in Issuer resources altogether
-func (cm *certManager) Initialize(ctx context.Context) error {
-	switch cm.certProvider {
-
-	case CertProviderLEStaging, CertProviderLEProd:
-		return cm.createIssuerLE(ctx)
-
-	case CertProviderCA:
-		return cm.createIssuerCA(ctx)
-
-	default:
-		return fmt.Errorf("unsupported TLS certificate provider %q", cm.certProvider)
+func (cm *certManager) IssuerExists(ctx context.Context) (bool, error) {
+	_, err := cm.certClient.CertmanagerV1().Issuers(cm.certificateNS).Get(ctx, cm.IssuerID(), metav1.GetOptions{})
+	if err != nil {
+		return false, err
 	}
+	return true, nil
+}
+
+func (cm *certManager) GetCertificateSecret(ctx context.Context, request CertificateRequest) (*corev1.Secret, error) {
+	c, err := cm.certClient.CertmanagerV1().Certificates(cm.certificateNS).Get(ctx, request.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for _, cond := range c.Status.Conditions {
+		if cond.Type == certman.CertificateConditionReady && cond.Status != cmmeta.ConditionTrue {
+			return nil, CertNotReadyErr
+		}
+	}
+	return cm.k8sClient.CoreV1().Secrets(cm.certificateNS).Get(ctx, c.Spec.SecretName, metav1.GetOptions{})
+
+}
+
+func (cm *certManager) GetCertificate(ctx context.Context, certReq CertificateRequest) (*certman.Certificate, error) {
+	return cm.certClient.CertmanagerV1().Certificates(cm.certificateNS).Get(ctx, certReq.Name, metav1.GetOptions{})
+}
+
+func (cm *certManager) GetCertificateStatus(ctx context.Context, certReq CertificateRequest) (CertStatus, error) {
+	cert, err := cm.GetCertificate(ctx, certReq)
+	if err != nil {
+		return CertStatus("unknown"), err
+	}
+	for _, cond := range cert.Status.Conditions {
+		if cond.Type == certman.CertificateConditionIssuing && cond.Status == cmmeta.ConditionTrue {
+			return CertStatus("issuing"), nil
+		}
+		if cond.Type == certman.CertificateConditionReady && cond.Status == cmmeta.ConditionTrue {
+			return CertStatus("ready"), nil
+		}
+	}
+	// TODO look into identifying an error status. There is a lastFailureTime
+	return CertStatus("unknown"), err
 }
 
 func (cm *certManager) Create(ctx context.Context, cr CertificateRequest) error {
-	if !isValidDomain(cr.Host(), cm.validDomains) {
-		return fmt.Errorf("cannot create certificate for host %s invalid domain", cr.Host())
+	if !isValidDomain(cr.Host, cm.validDomains) {
+		return fmt.Errorf("cannot create certificate for host %s invalid domain", cr.Host)
 	}
 	cert := cm.certificate(cr)
-	_, err := cm.certClient.Certificates(cm.certificateNS).Create(ctx, cert, metav1.CreateOptions{})
+	// add finalizer
+	metadata.AddFinalizer(cert, certFinalizer)
+	_, err := cm.certClient.CertmanagerV1().Certificates(cm.certificateNS).Create(ctx, cert, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
-	// TODO: Move to Certificate informer add handler
-	CertificateRequestCount.WithLabelValues(cm.IssuerID()).Inc()
 	return nil
 }
 
 func (cm *certManager) Delete(ctx context.Context, cr CertificateRequest) error {
 	// delete the certificate and delete the secrets
-	certNotFound := false
-
-	if err := cm.certClient.Certificates(cm.certificateNS).Delete(ctx, cr.Name(), metav1.DeleteOptions{}); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return err
-		}
-		certNotFound = true
+	// remove finalizer (todo come up with better way of handlng this)
+	cr.cleanUpFinalizer = true
+	if err := cm.Update(ctx, cr); err != nil {
+		return err
 	}
-	if err := cm.k8sClient.CoreV1().Secrets(cm.certificateNS).Delete(ctx, cr.Name(), metav1.DeleteOptions{}); err != nil {
+	if err := cm.certClient.CertmanagerV1().Certificates(cm.certificateNS).Delete(ctx, cr.Name, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
-		if !certNotFound {
-			// The Secret does not exist, which indicates the TLS certificate request is still pending,
-			// so we must account for decreasing the number of pending requests.
-			// TODO: Move to Certificate informer delete handler
-			CertificateRequestCount.WithLabelValues(cm.IssuerID()).Dec()
+	}
+	if err := cm.k8sClient.CoreV1().Secrets(cm.certificateNS).Delete(ctx, cr.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
 		}
 	}
 	return nil
 }
 
 func (cm *certManager) certificate(cr CertificateRequest) *certman.Certificate {
-	annotations := cr.Annotations()
-	annotations[tlsIssuerAnnotation] = cm.IssuerID()
+	annotations := cr.Annotations
+	annotations[TlsIssuerAnnotation] = cm.IssuerID()
+	labels := cr.Labels
 	return &certman.Certificate{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name(),
-			Namespace: cm.certificateNS,
+			Name:        cr.Name,
+			Namespace:   cm.certificateNS,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: certman.CertificateSpec{
-			SecretName: cr.Name(),
+			SecretName: cr.Name,
 			SecretTemplate: &certman.CertificateSecretTemplate{
-				Labels:      cr.Labels(),
+				Labels:      labels,
 				Annotations: annotations,
 			},
 			// TODO Some of the below should be pulled out into a CRD
@@ -212,7 +209,7 @@ func (cm *certManager) certificate(cr CertificateRequest) *certman.Certificate {
 				Size:      2048,
 			},
 			Usages:   certman.DefaultKeyUsages(),
-			DNSNames: []string{cr.Host()},
+			DNSNames: []string{cr.Host},
 			IssuerRef: cmmeta.ObjectReference{
 				Group: "cert-manager.io",
 				Kind:  "Issuer",
@@ -222,6 +219,32 @@ func (cm *certManager) certificate(cr CertificateRequest) *certman.Certificate {
 	}
 }
 
+func (cm *certManager) Update(ctx context.Context, cr CertificateRequest) error {
+	cert, err := cm.GetCertificate(ctx, cr)
+	if err != nil {
+		return err
+	}
+	if cert.Labels == nil {
+		cert.Labels = map[string]string{}
+	}
+	if cert.Annotations == nil {
+		cert.Annotations = map[string]string{}
+	}
+	for k, v := range cr.Labels {
+		cert.Labels[k] = v
+	}
+	for k, v := range cr.Annotations {
+		cert.Annotations[k] = v
+	}
+	if cr.cleanUpFinalizer {
+		metadata.RemoveFinalizer(cert, certFinalizer)
+	}
+	if _, err := cm.certClient.CertmanagerV1().Certificates(cm.certificateNS).Update(ctx, cert, metav1.UpdateOptions{}); err != nil {
+		return err
+	}
+	return nil
+}
+
 func isValidDomain(host string, allowed []string) bool {
 	for _, v := range allowed {
 		if strings.HasSuffix(host, v) {
@@ -229,173 +252,4 @@ func isValidDomain(host string, allowed []string) bool {
 		}
 	}
 	return false
-}
-
-func (cm *certManager) createIssuer(ctx context.Context, secret *corev1.Secret, issuer *certman.Issuer) error {
-	_, err := cm.k8sClient.CoreV1().Secrets(cm.certificateNS).Create(ctx, secret, metav1.CreateOptions{})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return err
-	}
-	if err != nil {
-		s, err := cm.k8sClient.CoreV1().Secrets(cm.certificateNS).Get(ctx, secret.Name, metav1.GetOptions{})
-		if err != nil {
-			return err
-		}
-		secret.ResourceVersion = s.ResourceVersion
-		_, err = cm.k8sClient.CoreV1().Secrets(cm.certificateNS).Update(ctx, secret, metav1.UpdateOptions{})
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = cm.certClient.Issuers(cm.certificateNS).Create(ctx, issuer, metav1.CreateOptions{})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return err
-	}
-	if err != nil {
-		is, err := cm.certClient.Issuers(cm.certificateNS).Get(ctx, issuer.Name, metav1.GetOptions{})
-		if err != nil {
-			return err
-		}
-		issuer.ResourceVersion = is.ResourceVersion
-		if _, err := cm.certClient.Issuers(cm.certificateNS).Update(ctx, issuer, metav1.UpdateOptions{}); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (cm *certManager) createIssuerLE(ctx context.Context) error {
-	return cm.createIssuer(ctx, awsSecret(), cm.issuerLE())
-}
-
-func (cm *certManager) issuerLE() *certman.Issuer {
-	server := leStagingAPI
-	if cm.certProvider == CertProviderLEProd {
-		server = leProdAPI
-	}
-
-	return &certman.Issuer{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: cm.certificateNS,
-			Name:      string(cm.certProvider),
-		},
-		Spec: certman.IssuerSpec{
-			IssuerConfig: certman.IssuerConfig{
-				ACME: &cmacme.ACMEIssuer{
-					Email:  os.Getenv(envLEEmail),
-					Server: server,
-					PrivateKey: cmmeta.SecretKeySelector{
-						LocalObjectReference: cmmeta.LocalObjectReference{
-							Name: string(cm.certProvider),
-						},
-					},
-					Solvers: []cmacme.ACMEChallengeSolver{
-						{
-							DNS01: &cmacme.ACMEChallengeSolverDNS01{
-								Route53: &cmacme.ACMEIssuerDNS01ProviderRoute53{
-									AccessKeyID:  os.Getenv(envAwsAccessKeyID),
-									HostedZoneID: os.Getenv(envAwsZoneID),
-									Region:       cm.Region,
-									SecretAccessKey: cmmeta.SecretKeySelector{
-										LocalObjectReference: cmmeta.LocalObjectReference{
-											Name: awsSecretName,
-										},
-										Key: envAwsAccessSecret,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func awsSecret() *corev1.Secret {
-	accessKeyID := os.Getenv(envAwsAccessKeyID)
-	accessSecret := os.Getenv(envAwsAccessSecret)
-	zoneID := os.Getenv(envAwsZoneID)
-
-	data := make(map[string][]byte)
-
-	data[envAwsAccessKeyID] = []byte(accessKeyID)
-	data[envAwsAccessSecret] = []byte(accessSecret)
-	data[envAwsZoneID] = []byte(zoneID)
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: awsSecretName,
-		},
-		Data: data,
-	}
-}
-
-func (cm *certManager) createIssuerCA(ctx context.Context) error {
-	if secret, err := cm.caSecret(); err != nil {
-		return err
-	} else {
-		return cm.createIssuer(ctx, secret, cm.issuerCA())
-	}
-}
-
-func (cm *certManager) issuerCA() *certman.Issuer {
-	return &certman.Issuer{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: cm.certificateNS,
-			Name:      string(cm.certProvider),
-		},
-		Spec: certman.IssuerSpec{
-			IssuerConfig: certman.IssuerConfig{
-				CA: &certman.CAIssuer{
-					SecretName: caSecretName,
-				},
-			},
-		},
-	}
-}
-
-func (cm *certManager) caSecret() (*corev1.Secret, error) {
-	ca := &x509.Certificate{
-		SerialNumber: big.NewInt(mathrand.Int63()),
-		Subject: pkix.Name{
-			Organization: []string{"Kuadrant"},
-		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(1, 0, 0),
-		IsCA:                  true,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		BasicConstraintsValid: true,
-	}
-
-	caPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
-	if err != nil {
-		return nil, err
-	}
-
-	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivateKey.PublicKey, caPrivateKey)
-	if err != nil {
-		return nil, err
-	}
-
-	certPem := pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: caBytes,
-	})
-
-	privateKeyPem := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(caPrivateKey),
-	})
-
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: caSecretName,
-		}, Data: map[string][]byte{
-			corev1.TLSCertKey:       certPem,
-			corev1.TLSPrivateKeyKey: privateKeyPem,
-		}, Type: corev1.SecretTypeTLS,
-	}, nil
 }

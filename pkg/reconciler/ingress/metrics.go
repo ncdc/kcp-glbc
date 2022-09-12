@@ -1,41 +1,44 @@
 package ingress
 
 import (
-	"time"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/kuadrant/kcp-glbc/pkg/metrics"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/kuadrant/kcp-glbc/pkg/tls"
+)
+
+const (
+	issuerLabel = "issuer"
 )
 
 var (
-	ingressObjectTimeToAdmission = prometheus.NewHistogram(
-		prometheus.HistogramOpts{
-			Name: "glbc_ingress_managed_object_time_to_admission",
-			Help: "Duration of the ingress object admission",
-			Buckets: []float64{
-				1 * time.Second.Seconds(),
-				5 * time.Second.Seconds(),
-				10 * time.Second.Seconds(),
-				15 * time.Second.Seconds(),
-				30 * time.Second.Seconds(),
-				45 * time.Second.Seconds(),
-				1 * time.Minute.Seconds(),
-				2 * time.Minute.Seconds(),
-				5 * time.Minute.Seconds(),
-			},
-		})
-
 	ingressObjectTotal = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "glbc_ingress_managed_object_total",
 			Help: "Total number of managed ingress object",
 		})
+	// tlsCertificateSecretCount is a prometheus metric which holds the number of
+	// TLS certificates currently managed.
+	tlsCertificateSecretCount = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "glbc_tls_certificate_secret_count",
+			Help: "GLBC TLS certificate secret count",
+		},
+		[]string{
+			issuerLabel,
+		},
+	)
 )
 
 func init() {
 	// Register metrics with the global prometheus registry
 	metrics.Registry.MustRegister(
-		ingressObjectTimeToAdmission,
 		ingressObjectTotal,
+		tlsCertificateSecretCount,
 	)
+}
+
+func InitMetrics(provider tls.Provider) {
+	issuer := provider.IssuerID()
+	tlsCertificateSecretCount.WithLabelValues(issuer).Set(0)
 }

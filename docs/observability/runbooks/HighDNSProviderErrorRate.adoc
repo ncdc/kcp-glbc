@@ -1,0 +1,46 @@
+// begin header
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+:numbered:
+:toc: macro
+:toc-title: pass:[<b>Table of Contents</b>]
+// end header
+= HighDNSProviderErrorRate
+
+toc::[]
+
+== Description
+
+The source of the alert is the `glbc_aws_route_53_*` metric. It fires when the error rate of the total requests made
+ is greater than the threshold which is 1%. This usually means, the DNS provider is not responding, metrics is misconfigured, or the metrics endpoint is not responding.
+
+== Prerequisites
+
+// Include the following steps in every alert SOP
+* Access to the physical cluster where GLBC should be running
+
+== Execute/Resolution
+
+// Include this as the first step in every alert SOP
+. Check the DNS & namespace for indications of problems.
++
+[source,sh]
+----
+kubectl logs deployment/kcp-glbc-controller-manager
+kubectl get events
+----
+If found a _5xx_ type error, proceed to verify the https://health.aws.amazon.com/health/status[AWS Health Status] for any know outages or issues.
+
+. Check the configuration (aws key & secret) to ensure they are correct.
+
+. Verify the https://health.aws.amazon.com/health/status[AWS Health Status]
+
+== Validate
+
+. Check the alert is no longer firing.
+// Add any extra steps

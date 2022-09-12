@@ -19,11 +19,10 @@
 LOCAL_SETUP_DIR="$(dirname "${BASH_SOURCE[0]}")"
 KCP_GLBC_DIR="${LOCAL_SETUP_DIR}/.."
 source "${LOCAL_SETUP_DIR}"/.setupEnv
-source "${LOCAL_SETUP_DIR}"/.startUtils
 
 DO_BREW="false"
 
-usage() { echo "usage: ./local-setup.sh -c <number of clusters>" 1>&2; exit 1; }
+usage() { echo "usage: ./local-setup.sh -c <number of clusters> <-b>" 1>&2; exit 1; }
 while getopts ":bc:" arg; do
   case "${arg}" in
     c)
@@ -47,6 +46,8 @@ else
   echo "skipping brew"
 fi
 
+source "${LOCAL_SETUP_DIR}"/.startUtils
+
 if [ -z "${NUM_CLUSTERS}" ]; then
     usage
 fi
@@ -65,15 +66,22 @@ KCP_LOG_FILE="${TEMP_DIR}"/kcp.log
 
 KIND_CLUSTER_PREFIX="kcp-cluster-"
 KCP_GLBC_CLUSTER_NAME="${KIND_CLUSTER_PREFIX}glbc-control"
+GLBC_WORKSPACE=root:kuadrant
 
-: ${KCP_VERSION:="release-0.5"}
+KUBECONFIG_KCP_ADMIN=.kcp/admin.kubeconfig
+KUBECONFIG_KCP_GLBC=${TEMP_DIR}/kcp.kubeconfig
+
+: ${KCP_VERSION:="release-0.8"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 
+: ${GLBC_DEPLOYMENTS_DIR=${KCP_GLBC_DIR}/config/deploy}
+: ${KUSTOMIZATION_DIR=${GLBC_DEPLOYMENTS_DIR}/local}
+: ${SYNC_TARGETS_DIR:=${GLBC_DEPLOYMENTS_DIR}/sync-targets}
 : ${GLBC_DEPLOY_COMPONENTS:="cert-manager"}
 
 for ((i=1;i<=$NUM_CLUSTERS;i++))
 do
-	CLUSTERS="${CLUSTERS}${KIND_CLUSTER_PREFIX}${i} "
+  CLUSTERS="${CLUSTERS}${KIND_CLUSTER_PREFIX}${i} "
 done
 
 mkdir -p ${TEMP_DIR}
@@ -105,31 +113,39 @@ nodes:
     protocol: TCP
 EOF
 
+  #Note: these aren't used anymore, but leaving for now since the e2e tests still refers to a directory with these kubeconfigs in it
   ${KIND_BIN} get kubeconfig --name=${cluster} > ${TEMP_DIR}/${cluster}.kubeconfig
   ${KIND_BIN} get kubeconfig --internal --name=${cluster} > ${TEMP_DIR}/${cluster}.kubeconfig.internal
 }
 
-createWorkloadCluster() {
+createKINDCluster() {
   [[ ! -z "$4" ]] && clusterName=${4} || clusterName=${1}
-  echo "Creating KCP WorkloadCluster (${clusterName})"
+  echo "Creating KIND Cluster (${clusterName})"
   createCluster $1 $2 $3
 
   kubectl config use-context kind-${1}
 
   echo "Deploying Ingress controller to ${1}"
-  VERSION=$(curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/stable.txt)
+  VERSION=controller-v1.2.1
   curl https://raw.githubusercontent.com/kubernetes/ingress-nginx/"${VERSION}"/deploy/static/provider/kind/deploy.yaml | sed "s/--publish-status-address=localhost/--report-node-internal-ip-address/g" | kubectl apply -f -
   kubectl annotate ingressclass nginx "ingressclass.kubernetes.io/is-default-class=true"
   echo "Waiting for deployments to be ready ..."
   kubectl -n ingress-nginx wait --timeout=300s --for=condition=Available deployments --all
 }
 
-createUserWorkloadCluster() {
-  createWorkloadCluster $1 $2 $3 $4
+createKINDSyncTarget() {
+  createKINDCluster $1 $2 $3 $4
   echo "Deploying kcp syncer to ${1}"
-  kubectl --kubeconfig=.kcp/admin.kubeconfig create namespace kcp-syncer --dry-run=client -o yaml | kubectl --kubeconfig=.kcp/admin.kubeconfig apply -f -
-  KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workload sync ${clusterName} --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services >${TEMP_DIR}/${clusterName}-syncer.yaml
-  kubectl apply -f ${TEMP_DIR}/${clusterName}-syncer.yaml
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl create namespace kcp-syncer --dry-run=client -o yaml | kubectl --kubeconfig=${KUBECONFIG_KCP_ADMIN} apply -f -
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workload sync ${clusterName} --kcp-namespace kcp-syncer --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${SYNC_TARGETS_DIR}/${clusterName}-syncer.yaml
+
+  # Enable advanced scheduling
+  echo "Enabling advanced scheduling"
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl annotate --overwrite synctarget ${clusterName} featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl label --overwrite synctarget ${clusterName} kuadrant.dev/synctarget=${clusterName}
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl get synctargets ${clusterName} -o json | jq .metadata.annotations
+
+  kubectl apply -f ${SYNC_TARGETS_DIR}/${clusterName}-syncer.yaml
 }
 
 #Delete existing kind clusters
@@ -141,7 +157,7 @@ fi
 
 #1. Start KCP
 echo "Starting KCP, sending logs to ${KCP_LOG_FILE}"
-${KCP_BIN} start --discovery-poll-interval 3s --run-controllers > ${KCP_LOG_FILE} 2>&1 &
+${KCP_BIN} --v=9 start --run-controllers > ${KCP_LOG_FILE} 2>&1 &
 KCP_PID=$!
 
 if ! ps -p ${KCP_PID}; then
@@ -152,38 +168,47 @@ if ! ps -p ${KCP_PID}; then
 fi
 
 echo "Waiting for KCP server to be ready..."
-wait_for "grep 'Ready to start controllers' ${KCP_LOG_FILE}" "kcp" "1m" "5"
+wait_for "grep 'Bootstrapped ClusterWorkspaceShard root|root' ${KCP_LOG_FILE}" "kcp" "1m" "5"
+sleep 5
 
 (cd ${KCP_GLBC_DIR} && make generate-ld-config)
 
-#2. Setup workspaces (kcp-glbc, kcp-glbc-compute, kcp-glbc-user, kcp-glbc-user-compute)
-KUBECONFIG=.kcp/admin.kubeconfig ${SCRIPT_DIR}/deploy.sh -c "none"
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "root"
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace create "kuadrant" --type universal --enter
 
-#3. Create GLBC workload cluster and wait for it to be ready
-createWorkloadCluster $KCP_GLBC_CLUSTER_NAME 8081 8444 "glbc"
-kubectl apply -f config/deploy/local/glbc-syncer.yaml
+#2. Setup workspace root:kuadrant
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${SCRIPT_DIR}/deploy.sh -k "${KUSTOMIZATION_DIR}" -c "none"
 
-KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-compute"
-KUBECONFIG=.kcp/admin.kubeconfig kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters "glbc"
+#3. Create GLBC sync target and wait for it to be ready
+createKINDCluster $KCP_GLBC_CLUSTER_NAME 8081 8444 "glbc"
+kubectl apply -f ${GLBC_DEPLOYMENTS_DIR}/sync-targets/glbc-syncer.yaml
 
-#4. Deploy GLBC components
-KUBECONFIG=.kcp/admin.kubeconfig ${SCRIPT_DIR}/deploy.sh -c ${GLBC_DEPLOY_COMPONENTS}
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${GLBC_WORKSPACE}"
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets "glbc"
 
-#5. Create User workload clusters and wait for them to be ready
-KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user-compute"
-echo "Creating $NUM_CLUSTERS kcp workload cluster(s)"
-port80=8082
-port443=8445
-for cluster in $CLUSTERS; do
-  createUserWorkloadCluster "$cluster" $port80 $port443
-  port80=$((port80 + 1))
-  port443=$((port443 + 1))
-done
-KUBECONFIG=.kcp/admin.kubeconfig kubectl wait --timeout=300s --for=condition=Ready=true workloadclusters --all
-KUBECONFIG=.kcp/admin.kubeconfig kubectl apply -f ./utils/kcp-contrib/location.yaml
+#4. Create User sync target clusters and wait for them to be ready
+if [ -n "$CLUSTERS" ]; then
+  echo "Creating $NUM_CLUSTERS kcp SyncTarget cluster(s)"
+  port80=8082
+  port443=8445
+  for cluster in $CLUSTERS; do
+    createKINDSyncTarget "$cluster" $port80 $port443
+    port80=$((port80 + 1))
+    port443=$((port443 + 1))
+  done
+  KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl wait --timeout=300s --for=condition=Ready=true synctargets $CLUSTERS
+fi
 
-#6. Switch to user workspace
-KUBECONFIG=.kcp/admin.kubeconfig ${KUBECTL_KCP_BIN} workspace use "root:default:kcp-glbc-user"
+#5.Create the GLBC APIExport after all the clusters have synced and deploy GLBC components (cert-manager)
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${SCRIPT_DIR}/deploy.sh -k "${KUSTOMIZATION_DIR}" -c ${GLBC_DEPLOY_COMPONENTS}
+
+#6. Miscellaneous local development specific steps
+
+# Create the kcp-glbc namespace, kcp-glbc-controller-manager service account and generate a kubeconfig for access
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${SCRIPT_DIR}/create_glbc_kubeconfig.sh -o ${KUBECONFIG_KCP_GLBC}
+
+# Apply the default glbc-ca issuer
+kubectl --kubeconfig=${KUBECONFIG_KCP_ADMIN} apply -n kcp-glbc -f ./config/default/issuer.yaml
 
 echo ""
 echo "KCP PID          : ${KCP_PID}"
@@ -193,21 +218,22 @@ echo ""
 echo "Run Option 1 (Local):"
 echo ""
 echo "       cd ${PWD}"
-echo "       export KUBECONFIG=config/deploy/local/kcp.kubeconfig"
-echo "       ./bin/kubectl-kcp workspace use root:default:kcp-glbc"
-echo "       ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin"
+echo "       KUBECONFIG=${KUBECONFIG_KCP_GLBC} ./bin/kcp-glbc"
 echo ""
 echo "Run Option 2 (Deploy latest in KCP with monitoring enabled):"
 echo ""
 echo "       cd ${PWD}"
-echo "       KUBECONFIG=.kcp/admin.kubeconfig ./utils/deploy.sh"
+echo "       export KUBECONFIG=${KUBECONFIG_KCP_ADMIN}"
+echo "       KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ./utils/deploy.sh -k ${KUSTOMIZATION_DIR}"
 echo "       KUBECONFIG=${KUBECONFIG} ./utils/deploy-observability.sh"
 echo ""
 echo "When glbc is running, try deploying the sample service:"
 echo ""
 echo "       cd ${PWD}"
-echo "       export KUBECONFIG=.kcp/admin.kubeconfig"
-echo "       ./bin/kubectl-kcp workspace use root:default:kcp-glbc-user"
+echo "       export KUBECONFIG=${KUBECONFIG_KCP_ADMIN}"
+echo "       ./bin/kubectl-kcp ws '~'"
+echo "       kubectl apply -f ${KUSTOMIZATION_DIR}/kcp-glbc/apiexports/root-kuadrant-kubernetes-apibinding.yaml"
+echo "       kubectl apply -f ${KUSTOMIZATION_DIR}/kcp-glbc/apiexports/root-kuadrant-glbc-apibinding.yaml"
 echo "       kubectl apply -f samples/echo-service/echo.yaml"
 echo ""
 read -p "Press enter to exit -> It will kill the KCP process running in background"

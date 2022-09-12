@@ -16,10 +16,10 @@ package reconciler
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
-
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
@@ -28,11 +28,17 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/log"
 )
 
+const LABEL_HCG_MANAGED = "kuadrant.dev/hcg.managed"
+
 type Controller struct {
 	Name    string
 	Queue   workqueue.RateLimitingInterface
 	Process func(context.Context, string) error
 	Logger  logr.Logger
+}
+
+type ControllerConfig struct {
+	NameSuffix string
 }
 
 func NewController(name string, queue workqueue.RateLimitingInterface) *Controller {
@@ -45,13 +51,29 @@ func NewController(name string, queue workqueue.RateLimitingInterface) *Controll
 	return controller
 }
 
+func (c *ControllerConfig) GetName(defaultName string) string {
+	if c.NameSuffix != "" {
+		return fmt.Sprintf("%s/%s", defaultName, c.NameSuffix)
+	}
+	return defaultName
+}
+
 func (c *Controller) Enqueue(obj interface{}) {
-	key, err := cache.MetaNamespaceKeyFunc(obj)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		runtime.HandleError(err)
 		return
 	}
 	c.Queue.Add(key)
+}
+
+func (c *Controller) EnqueueAfter(obj interface{}, dur time.Duration) {
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		runtime.HandleError(err)
+		return
+	}
+	c.Queue.AddAfter(key, dur)
 }
 
 func (c *Controller) Start(ctx context.Context, numThreads int) {

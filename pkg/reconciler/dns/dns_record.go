@@ -4,17 +4,19 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	utilclock "k8s.io/apimachinery/pkg/util/clock"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	utilclock "k8s.io/utils/clock"
 
-	"github.com/kcp-dev/logicalcluster"
+	"github.com/kcp-dev/logicalcluster/v2"
 
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
+	"github.com/kuadrant/kcp-glbc/pkg/util/metadata"
 	"github.com/kuadrant/kcp-glbc/pkg/util/slice"
 )
 
@@ -29,7 +31,7 @@ const (
 )
 
 func (c *Controller) reconcile(ctx context.Context, dnsRecord *v1.DNSRecord) error {
-	c.Logger.Info("Reconciling DNSRecord", "dnsRecord", dnsRecord)
+	c.Logger.V(3).Info("starting reconcile of dnsRecord ", "name", dnsRecord.Name, "namespace", dnsRecord.Namespace, "cluster", logicalcluster.From(dnsRecord))
 
 	// If the DNS record was deleted, clean up and return.
 	if dnsRecord.DeletionTimestamp != nil && !dnsRecord.DeletionTimestamp.IsZero() {
@@ -38,10 +40,12 @@ func (c *Controller) reconcile(ctx context.Context, dnsRecord *v1.DNSRecord) err
 		}
 
 		c.Logger.Info("Deleting DNSRecord", "dnsRecord", dnsRecord)
-		if err := c.deleteRecord(dnsRecord); err != nil {
+		if err := c.deleteRecord(dnsRecord); err != nil && !strings.Contains(err.Error(), "was not found") {
 			c.Logger.Error(err, "Failed to delete DNSRecord", "record", dnsRecord)
 			return err
 		}
+
+		metadata.RemoveFinalizer(dnsRecord, DNSRecordFinalizer)
 
 		return nil
 	}
@@ -54,10 +58,6 @@ func (c *Controller) reconcile(ctx context.Context, dnsRecord *v1.DNSRecord) err
 	if !dnsZoneStatusSlicesEqual(statuses, dnsRecord.Status.Zones) || dnsRecord.Status.ObservedGeneration != dnsRecord.Generation {
 		dnsRecord.Status.Zones = statuses
 		dnsRecord.Status.ObservedGeneration = dnsRecord.Generation
-		_, err := c.dnsRecordClient.Cluster(logicalcluster.From(dnsRecord)).KuadrantV1().DNSRecords(dnsRecord.Namespace).UpdateStatus(ctx, dnsRecord, metav1.UpdateOptions{})
-		if err != nil {
-			return err
-		}
 	}
 
 	if err := c.ReconcileHealthChecks(ctx, dnsRecord); err != nil {

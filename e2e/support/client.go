@@ -23,6 +23,7 @@ import (
 
 	kcp "github.com/kcp-dev/kcp/pkg/client/clientset/versioned"
 
+	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 )
 
@@ -30,6 +31,7 @@ type Client interface {
 	Core() kubernetes.ClusterInterface
 	Kcp() kcp.ClusterInterface
 	Kuadrant() kuadrantv1.ClusterInterface
+	Certs() certmanclient.Interface
 	GetConfig() *rest.Config
 }
 
@@ -37,7 +39,12 @@ type client struct {
 	core     kubernetes.ClusterInterface
 	kcp      kcp.ClusterInterface
 	kuadrant kuadrantv1.ClusterInterface
+	certs    certmanclient.Interface
 	config   *rest.Config
+}
+
+func (c *client) Certs() certmanclient.Interface {
+	return c.certs
 }
 
 func (c *client) Core() kubernetes.ClusterInterface {
@@ -81,10 +88,16 @@ func newTestClient() (Client, error) {
 		return nil, err
 	}
 
+	certClient, err := certmanclient.NewForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	return &client{
 		core:     kubeClient,
 		kcp:      kcpClient,
 		kuadrant: kuandrantClient,
+		certs:    certClient,
 		config:   cfg,
 	}, nil
 }

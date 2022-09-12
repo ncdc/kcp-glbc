@@ -20,11 +20,10 @@ import (
 	"fmt"
 
 	"github.com/onsi/gomega"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apisv1alpha1 "github.com/kcp-dev/kcp/pkg/apis/apis/v1alpha1"
-	"github.com/kcp-dev/logicalcluster"
+	"github.com/kcp-dev/logicalcluster/v2"
 )
 
 const ComputeServiceExportName = "kubernetes"
@@ -62,6 +61,67 @@ func (o *withExportReference) applyTo(to interface{}) error {
 
 var _ Option = &withExportReference{}
 
+func WithGLBCAcceptablePermissionClaims(identityHash string) Option {
+	return &withGLBCAcceptablePermissionClaims{
+		acceptablePermissionClaims: []apisv1alpha1.AcceptablePermissionClaim{
+			{
+				PermissionClaim: apisv1alpha1.PermissionClaim{
+					GroupResource: apisv1alpha1.GroupResource{
+						Group:    "",
+						Resource: "secrets",
+					},
+				},
+				State: apisv1alpha1.ClaimAccepted,
+			},
+			{
+				PermissionClaim: apisv1alpha1.PermissionClaim{
+					GroupResource: apisv1alpha1.GroupResource{
+						Group:    "",
+						Resource: "services",
+					},
+					IdentityHash: identityHash,
+				},
+				State: apisv1alpha1.ClaimAccepted,
+			},
+			{
+				PermissionClaim: apisv1alpha1.PermissionClaim{
+					GroupResource: apisv1alpha1.GroupResource{
+						Group:    "apps",
+						Resource: "deployments",
+					},
+					IdentityHash: identityHash,
+				},
+				State: apisv1alpha1.ClaimAccepted,
+			},
+			{
+				PermissionClaim: apisv1alpha1.PermissionClaim{
+					GroupResource: apisv1alpha1.GroupResource{
+						Group:    "networking.k8s.io",
+						Resource: "ingresses",
+					},
+					IdentityHash: identityHash,
+				},
+				State: apisv1alpha1.ClaimAccepted,
+			},
+		},
+	}
+}
+
+type withGLBCAcceptablePermissionClaims struct {
+	acceptablePermissionClaims []apisv1alpha1.AcceptablePermissionClaim
+}
+
+func (o *withGLBCAcceptablePermissionClaims) applyTo(to interface{}) error {
+	binding, ok := to.(*apisv1alpha1.APIBinding)
+	if !ok {
+		return fmt.Errorf("cannot apply WithExportReference option to %q", to)
+	}
+	binding.Spec.PermissionClaims = o.acceptablePermissionClaims
+	return nil
+}
+
+var _ Option = &withGLBCAcceptablePermissionClaims{}
+
 func createAPIBinding(t Test, name string, options ...Option) *apisv1alpha1.APIBinding {
 	binding := &apisv1alpha1.APIBinding{
 		TypeMeta: metav1.TypeMeta{
@@ -97,4 +157,9 @@ func APIBinding(t Test, workspace, name string) func(g gomega.Gomega) *apisv1alp
 
 func APIBindingPhase(binding *apisv1alpha1.APIBinding) apisv1alpha1.APIBindingPhaseType {
 	return binding.Status.Phase
+}
+
+func GetAPIBinding(t Test, workspace, name string) *apisv1alpha1.APIBinding {
+	t.T().Helper()
+	return APIBinding(t, workspace, name)(t)
 }

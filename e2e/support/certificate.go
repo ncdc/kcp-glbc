@@ -21,7 +21,10 @@ import (
 	"encoding/pem"
 	"errors"
 
+	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
+	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func CertificateFrom(secret *corev1.Secret) (*x509.Certificate, error) {
@@ -35,4 +38,21 @@ func CertificateFrom(secret *corev1.Secret) (*x509.Certificate, error) {
 		return nil, err
 	}
 	return cert, err
+}
+
+func GetCertificate(t Test, namespace, name string) *certman.Certificate {
+	t.T().Helper()
+	return TLSCertificate(t, namespace, name)(t)
+}
+
+func TLSCertificate(t Test, namespace, name string) func(g gomega.Gomega) *certman.Certificate {
+	return func(g gomega.Gomega) *certman.Certificate {
+		cert, err := t.Client().Certs().CertmanagerV1().Certificates(namespace).Get(t.Ctx(), name, v1.GetOptions{})
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		return cert
+	}
+}
+
+func TLSCertificateSpec(cert *certman.Certificate) certman.CertificateSpec {
+	return cert.Spec
 }

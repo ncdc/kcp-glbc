@@ -13,15 +13,16 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/kcp-dev/logicalcluster"
+	"github.com/kcp-dev/logicalcluster/v2"
 
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler"
 )
 
-const controllerName = "kcp-glbc-deployment"
+const defaultControllerName = "kcp-glbc-deployment"
 
 // NewController returns a new Controller which reconciles Deployment.
 func NewController(config *ControllerConfig) (*Controller, error) {
+	controllerName := config.GetName(defaultControllerName)
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName)
 	c := &Controller{
 		Controller:            reconciler.NewController(controllerName, queue),
@@ -44,6 +45,7 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 }
 
 type ControllerConfig struct {
+	*reconciler.ControllerConfig
 	DeploymentClient      kubernetes.ClusterInterface
 	SharedInformerFactory informers.SharedInformerFactory
 }
@@ -58,7 +60,7 @@ type Controller struct {
 }
 
 func (c *Controller) process(ctx context.Context, key string) error {
-	deployment, exists, err := c.indexer.GetByKey(key)
+	object, exists, err := c.indexer.GetByKey(key)
 	if err != nil {
 		return err
 	}
@@ -68,16 +70,16 @@ func (c *Controller) process(ctx context.Context, key string) error {
 		return nil
 	}
 
-	current := deployment.(*appsv1.Deployment)
-	previous := current.DeepCopy()
+	current := object.(*appsv1.Deployment)
+	target := current.DeepCopy()
 
-	if err = c.reconcile(ctx, current); err != nil {
+	if err = c.reconcile(ctx, target); err != nil {
 		return err
 	}
 
 	// If the object being reconciled changed as a result, update it.
-	if !equality.Semantic.DeepEqual(previous, current) {
-		_, err := c.coreClient.Cluster(logicalcluster.From(current)).AppsV1().Deployments(current.Namespace).Update(ctx, current, metav1.UpdateOptions{})
+	if !equality.Semantic.DeepEqual(target, current) {
+		_, err := c.coreClient.Cluster(logicalcluster.From(target)).AppsV1().Deployments(target.Namespace).Update(ctx, target, metav1.UpdateOptions{})
 		return err
 	}
 

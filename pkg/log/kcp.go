@@ -24,6 +24,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/kcp-dev/kcp/pkg/apis/tenancy/v1alpha1/helper"
 )
 
 // KcpAwareEncoder is a KCP-aware Zap Encoder.
@@ -59,9 +61,8 @@ func (w kcpObjectWrapper) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 		return fmt.Errorf("got runtime.Object without object metadata: %v", w.obj)
 	}
 
-	if ns := objMeta.GetClusterName(); ns != "" {
-		enc.AddString("workspace", ns)
-	}
+	enc.AddString("object", helper.QualifiedObjectName(objMeta))
+
 	if ns := objMeta.GetNamespace(); ns != "" {
 		enc.AddString("namespace", ns)
 	}

@@ -3,7 +3,7 @@ SHELL := /usr/bin/env bash
 
 NUM_CLUSTERS := 2
 DO_BREW := true
-KCP_BRANCH := release-0.5
+KCP_BRANCH := release-0.8
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
 IMAGE_TAG ?= latest
@@ -11,6 +11,8 @@ IMG ?= $(IMAGE_TAG_BASE):$(IMAGE_TAG)
 
 KUBECONFIG ?= $(shell pwd)/.kcp/admin.kubeconfig
 CLUSTERS_KUBECONFIG_DIR ?= $(shell pwd)/tmp
+
+PROMTOOL_IMAGE := quay.io/prometheus/prometheus:v2.36.2
 
 .PHONY: all
 all: build
@@ -24,7 +26,7 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: clean
-clean: clean-ld-kubeconfig ## Clean up temporary files.
+clean: clean-ld-apiexports clean-ld-synctargets ## Clean up temporary files.
 	-rm -rf ./.kcp
 	-rm -f ./bin/*
 	-rm -rf ./tmp
@@ -70,10 +72,22 @@ e2e: build
 	## Run the metrics test first, so it starts from a clean state
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
 	AWS_DNS_PUBLIC_ZONE_ID="${AWS_DNS_PUBLIC_ZONE_ID}" \
-	go test -timeout 60m -v ./e2e/metrics -tags=e2e
+	go test -count=1 -timeout 60m -v ./e2e/metrics -tags=e2e
 	## Run the other tests
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
-	go test -timeout 60m -v ./e2e -tags=e2e
+	go test -count=1 -timeout 60m -v ./e2e -tags=e2e
+
+TEST_DNSRECORD_COUNT ?= 2
+TEST_INGRESS_COUNT ?= 2
+.PHONY: performance
+performance: build
+	@date +"Performance Test Start: %s%3N"
+	KUBECONFIG="$(KUBECONFIG)" \
+	AWS_DNS_PUBLIC_ZONE_ID="$(AWS_DNS_PUBLIC_ZONE_ID)" \
+	TEST_DNSRECORD_COUNT="$(TEST_DNSRECORD_COUNT)" \
+	TEST_INGRESS_COUNT="$(TEST_INGRESS_COUNT)" \
+	go test -count=1 -timeout 60m -v ./e2e/performance -tags=performance
+	@date +"Performance Test End: %s%3N"
 
 ##@ CI
 
@@ -106,17 +120,18 @@ uninstall: generate-crd kustomize ## Uninstall CRDs from the K8s cluster specifi
 .PHONY: deploy
 deploy: generate-crd kustomize generate-ld-config ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/deploy/local | kubectl apply -f -
+	$(KUSTOMIZE) build config/deploy/local/kcp-glbc | kubectl apply -f -
 
 .PHONY: undeploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/deploy/local | kubectl delete -f -
+	$(KUSTOMIZE) build config/deploy/local/kcp-glbc | kubectl delete -f -
 
 ## Local Deployment
-LD_DIR=config/deploy/local
+LD_DIR=config/deploy/local/kcp-glbc
+LD_APIEXPORTS=$(LD_DIR)/apiexports
+LD_SYNC_TARGETS=$(LD_DIR)/../../sync-targets
 LD_AWS_CREDS_ENV=$(LD_DIR)/aws-credentials.env
 LD_CONTROLLER_CONFIG_ENV=$(LD_DIR)/controller-config.env
-LD_KCP_KUBECONFIG=$(LD_DIR)/kcp.kubeconfig
 
 $(LD_AWS_CREDS_ENV):
 	envsubst \
@@ -128,27 +143,28 @@ $(LD_CONTROLLER_CONFIG_ENV):
 		< $(LD_CONTROLLER_CONFIG_ENV).template \
 		> $(LD_CONTROLLER_CONFIG_ENV)
 
-$(LD_KCP_KUBECONFIG):
-	cp .kcp/admin.kubeconfig $(LD_KCP_KUBECONFIG)
-
 .PHONY: generate-ld-config
-generate-ld-config: $(LD_AWS_CREDS_ENV) $(LD_CONTROLLER_CONFIG_ENV) $(LD_KCP_KUBECONFIG) ## Generate local deployment files.
+generate-ld-config: $(LD_AWS_CREDS_ENV) $(LD_CONTROLLER_CONFIG_ENV) ## Generate local deployment files.
 
 .PHONY: clean-ld-env
 clean-ld-env:
 	-rm -f $(LD_AWS_CREDS_ENV)
 	-rm -f $(LD_CONTROLLER_CONFIG_ENV)
 
-.PHONY: clean-ld-kubeconfig
-clean-ld-kubeconfig:
-	-rm -f $(LD_KCP_KUBECONFIG)
+.PHONY: clean-ld-apiexports
+clean-ld-apiexports:
+	-rm -f $(LD_APIEXPORTS)/*.yaml
+
+.PHONY: clean-ld-synctargets
+clean-ld-synctargets:
+	-rm -f $(LD_SYNC_TARGETS)/*.yaml
 
 .PHONY: clean-ld-config
-clean-ld-config: clean-ld-env clean-ld-kubeconfig ## Remove local deployment files.
+clean-ld-config: clean-ld-env clean-ld-apiexports clean-ld-synctargets ## Remove local deployment files.
 
 LOCAL_SETUP_FLAGS=""
 ifeq ($(DO_BREW),true)
-	LOCAL_SETUP_FLAGS="-b"
+	LOCAL_SETUP_FLAGS:=-b
 endif
 
 .PHONY: local-setup
@@ -172,7 +188,7 @@ KIND ?= $(LOCALBIN)/kind
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v4.5.4
 CONTROLLER_TOOLS_VERSION ?= v0.8.0
-KIND_VERSION ?= v0.11.1
+KIND_VERSION ?= v0.14.0
 
 .PHONY: kcp
 kcp: $(KCP) ## Download kcp locally if necessary.
@@ -209,3 +225,5 @@ gen-metrics-docs:
 .PHONY: verify-gen-metrics-docs
 verify-gen-metrics-docs: gen-metrics-docs
 	git diff --exit-code
+
+include ./config/observability/observability.mk

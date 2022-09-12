@@ -1,8 +1,54 @@
 package v1
 
 import (
+	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/kcp-dev/logicalcluster/v2"
 )
+
+// +crd
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
+type DomainVerification struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              DomainVerificationSpec `json:"spec"`
+	// +optional
+	Status DomainVerificationStatus `json:"status"`
+}
+
+func (in *DomainVerification) GetToken() string {
+	return fmt.Sprintf("glbctoken=glbc-%s", logicalcluster.From(in))
+}
+
+type DomainVerificationSpec struct {
+	Domain string `json:"domain"`
+}
+
+type DomainVerificationStatus struct {
+	Token    string `json:"token"`
+	Verified bool   `json:"verified"`
+	// +optional
+	LastChecked metav1.Time `json:"lastChecked,omitempty"`
+	// +optional
+	NextCheck metav1.Time `json:"nextCheck,omitempty"`
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type DomainVerificationList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []DomainVerification `json:"items"`
+}
 
 // +genclient
 // +kubebuilder:object:root=true
@@ -78,7 +124,10 @@ type Endpoint struct {
 
 // DNSRecordSpec contains the details of a DNS record.
 type DNSRecordSpec struct {
-	Endpoints []*Endpoint `json:"endpoints,omitempty"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	// +required
+	Endpoints []*Endpoint `json:"endpoints"`
 }
 
 // DNSRecordStatus is the most recently observed status of each record.

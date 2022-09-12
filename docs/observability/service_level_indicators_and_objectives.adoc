@@ -1,0 +1,17 @@
+= Service Level Indicators and Objectives
+
+NOTE: The thresholds for indicators and objectives are intended as examples. Tweak them to suit your service availability needs. Make sure to take into account any dependencies on 3rd party services, such as DNS and certificate signing. Your own objectives should *not* aim to be better than the combined agreed level of service of your dependencies.
+
+[cols="1,1,1"]
+|===
+|Category|SLI|SLO
+
+|Ingress Admission Latency
+|The proportion of sufficiently fast Ingress admissions, as measured from ingress creation through to admission time in the gateway. "Sufficiently fast" is defined as < 2 minutes , or < 5 minutes.
+
+Uses histogram_quantile with the `glbc_ingress_managed_object_time_to_admission` histogram type metric.
+|90% of admissions < 2 minutes
+
+95% of admissions < 5 minutes
+|===
+

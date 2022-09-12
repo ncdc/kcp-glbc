@@ -80,7 +80,10 @@ spec:
                         type: string
                       type: array
                   type: object
+                minItems: 1
                 type: array
+            required:
+            - endpoints
             type: object
           status:
             description: status is the most recently observed status of the dnsRecord.

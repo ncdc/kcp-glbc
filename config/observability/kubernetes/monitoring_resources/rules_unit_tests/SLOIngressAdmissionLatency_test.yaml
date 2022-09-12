@@ -1,0 +1,230 @@
+rule_files:
+  - ../rules-glbc.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: glbc_ingress_managed_object_time_to_admission_bucket{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager",le="120"}
+        values: "0+60x60 3655+55x59 6960+60x5"
+      - series: glbc_ingress_managed_object_time_to_admission_count{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}
+        values: "0+60x60 3660+60x59 7260+60x5"
+    promql_expr_test:
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate5m
+        eval_time: 1h # 1x long window
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate5m{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate5m
+        eval_time: 2h # 2x long window
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate5m{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.08333333333333337
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate5m
+        eval_time: 2h6m # 2x long window + 1x short window (+1m)
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate5m{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate1h
+        eval_time: 1h
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate1h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate1h
+        eval_time: 2h
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate1h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.08333333333333337
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate1h
+        eval_time: 2h6m
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate1h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.07499999999999996
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-5m1h
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-5m1h
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              container: manager
+              job: observability-operator/podmonitor-kcp-glbc-controller-manager
+              namespace: test
+            exp_annotations:
+              summary: 'At least 2.0% of the SLO error budget has been consumed over the past 5m and 1h windows'
+              description: 'High error budget burn in namespace test (current value: 0.08333333333333337). Check the runbook for how to resolve this.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/SLOIngressAdmissionLatency.adoc'
+      - eval_time: 2h6m
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-5m1h
+        exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: glbc_ingress_managed_object_time_to_admission_bucket{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager",le="120"}
+        values: "0+60x360 21655+55x359 41460+60x30"
+      - series: glbc_ingress_managed_object_time_to_admission_count{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}
+        values: "0+60x360 21660+60x359 43260+60x30"
+    promql_expr_test:
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate30m
+        eval_time: 6h # 1x long window
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate30m{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate30m
+        eval_time: 12h # 2x long window
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate30m{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.08333333333333337
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate30m
+        eval_time: 12h31m # 2x long window + 1x short window (+1m)
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate30m{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate6h
+        eval_time: 6h
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate6h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate6h
+        eval_time: 12h
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate6h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.08333333333333337
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate6h
+        eval_time: 12h31m
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate6h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.0761574074074074
+    alert_rule_test:
+      - eval_time: 6h
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-30m6h
+        exp_alerts: []
+      - eval_time: 12h
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-30m6h
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              container: manager
+              job: observability-operator/podmonitor-kcp-glbc-controller-manager
+              namespace: test
+            exp_annotations:
+              summary: 'At least 5.0% of the SLO error budget has been consumed over the past 30m and 6h windows'
+              description: 'High error budget burn in namespace test (current value: 0.08333333333333337). Check the runbook for how to resolve this.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/SLOIngressAdmissionLatency.adoc'
+      - eval_time: 12h31m
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-30m6h
+        exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: glbc_ingress_managed_object_time_to_admission_bucket{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager",le="120"}
+        values: "0+60x1440 86455+55x1439 165660+60x120"
+      - series: glbc_ingress_managed_object_time_to_admission_count{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}
+        values: "0+60x1440 86460+60x1439 172860+60x120"
+    promql_expr_test:
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate2h
+        eval_time: 1d # 1x long window
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate2h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate2h
+        eval_time: 2d # 2x long window
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate2h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.08333333333333337
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate2h
+        eval_time: 2d2h1m # 2x long window + 1x short window (+1m)
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate2h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate1d
+        eval_time: 1d
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate1d{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate1d
+        eval_time: 2d
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate1d{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.08333333333333337
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate1d
+        eval_time: 2d2h1m
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate1d{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.07633101851851853
+    alert_rule_test:
+      - eval_time: 1d
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-2h1d
+        exp_alerts: []
+      - eval_time: 2d
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-2h1d
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              container: manager
+              job: observability-operator/podmonitor-kcp-glbc-controller-manager
+              namespace: test
+            exp_annotations:
+              summary: 'At least 10.0% of the SLO error budget has been consumed over the past 2h and 1d windows'
+              description: 'High error budget burn in namespace test (current value: 0.08333333333333337). Check the runbook for how to resolve this.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/SLOIngressAdmissionLatency.adoc'
+      - eval_time: 2d2h1m
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-2h1d
+        exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: glbc_ingress_managed_object_time_to_admission_bucket{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager",le="120"}
+        values: "0+60x4320 259255+55x4319 496860+60x360"
+      - series: glbc_ingress_managed_object_time_to_admission_count{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}
+        values: "0+60x4320 259260+60x4319 518460+60x360"
+    promql_expr_test:
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate6h
+        eval_time: 3d # 1x long window
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate6h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate6h
+        eval_time: 6d # 2x long window
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate6h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.08333333333333337
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate6h
+        eval_time: 6d6h1m # 2x long window + 1x short window (+1m)
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate6h{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate3d
+        eval_time: 3d
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate3d{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate3d
+        eval_time: 6d
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate3d{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.08333333333333337
+      - expr: glbc_ingress_managed_object_time_to_admission:burnrate3d
+        eval_time: 6d6h1m
+        exp_samples:
+          - labels: 'glbc_ingress_managed_object_time_to_admission:burnrate3d{namespace="test",container="manager",job="observability-operator/podmonitor-kcp-glbc-controller-manager"}'
+            value: 0.07636959876543215
+    alert_rule_test:
+      - eval_time: 3d
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-6h3d
+        exp_alerts: []
+      - eval_time: 6d
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-6h3d
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              container: manager
+              job: observability-operator/podmonitor-kcp-glbc-controller-manager
+              namespace: test
+            exp_annotations:
+              summary: 'At least 10.0% of the SLO error budget has been consumed over the past 6h and 3d windows'
+              description: 'High error budget burn in namespace test (current value: 0.08333333333333337). Check the runbook for how to resolve this.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/SLOIngressAdmissionLatency.adoc'
+      - eval_time: 6d6h1m
+        alertname: SLOIngressAdmissionLatency-ErrorBudgetBurn-6h3d
+        exp_alerts: []

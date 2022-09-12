@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	logicalcluster "github.com/kcp-dev/logicalcluster"
+	v2 "github.com/kcp-dev/logicalcluster/v2"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	scheme "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,7 +38,7 @@ type DNSRecordInterface interface {
 // dNSRecords implements DNSRecordInterface
 type dNSRecords struct {
 	client  rest.Interface
-	cluster logicalcluster.Name
+	cluster v2.Name
 	ns      string
 }
 

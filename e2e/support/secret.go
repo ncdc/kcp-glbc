@@ -24,7 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/kcp-dev/logicalcluster"
+	"github.com/kcp-dev/logicalcluster/v2"
 )
 
 func GetSecret(t Test, namespace *corev1.Namespace, name string) *corev1.Secret {
@@ -37,6 +37,19 @@ func Secret(t Test, namespace *corev1.Namespace, name string) func(g gomega.Gome
 		secret, err := t.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Secrets(namespace.Name).Get(t.Ctx(), name, metav1.GetOptions{})
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		return secret
+	}
+}
+
+func GetSecrets(t Test, namespace *corev1.Namespace, labelSelector string) []corev1.Secret {
+	t.T().Helper()
+	return Secrets(t, namespace, labelSelector)(t)
+}
+
+func Secrets(t Test, namespace *corev1.Namespace, labelSelector string) func(g gomega.Gomega) []corev1.Secret {
+	return func(g gomega.Gomega) []corev1.Secret {
+		secrets, err := t.Client().Core().Cluster(logicalcluster.From(namespace)).CoreV1().Secrets(namespace.Name).List(t.Ctx(), metav1.ListOptions{LabelSelector: labelSelector})
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		return secrets.Items
 	}
 }
 

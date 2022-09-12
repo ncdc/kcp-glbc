@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 #space-seperated packages to install
-brew_packages="chipmk/tap/docker-mac-net-connect"
+brew_packages="chipmk/tap/docker-mac-net-connect coreutils"
 
 #space-seperated list of services to start after installation
 start_services="chipmk/tap/docker-mac-net-connect"

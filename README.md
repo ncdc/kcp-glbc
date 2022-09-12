@@ -19,6 +19,7 @@ Clone the repo and run:
 ```bash
 make local-setup
 ```
+> NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/troubleshooting.md) document.
 
 This script will:
 
@@ -44,10 +45,10 @@ Now you can create a new ingress resource from the root of the project:
 
 ```bash 
 export KUBECONFIG=.kcp/admin.kubeconfig
-./bin/kubectl-kcp workspace use root:default:kcp-glbc-user
+./bin/kubectl-kcp workspace use root:kuadrant
 kubectl apply -f samples/echo-service/echo.yaml
 ```
-N.B. It's important that you use the `.kcp/admin.kubeconfig` kube config and switch to the `root:default:kcp-glbc-user` workspace.
+N.B. It's important that you use the `.kcp/admin.kubeconfig` kube config and switch to the `root:kuadrant` workspace.
 
 To verify the resources were created successfully, check the output of the following:
 
@@ -64,7 +65,7 @@ With a running local setup i.e. you have successfully executed `make local-setup
 ```
 
 ```bash
-$ kubectl get workloadclusters -o wide
+$ kubectl get synctargets -o wide
 NAME              LOCATION          READY   SYNCED API RESOURCES
 kcp-cluster-1     kcp-cluster-1     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
 kcp-cluster-2     kcp-cluster-2     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
@@ -89,16 +90,38 @@ KUBECONFIG=./tmp/kcp-cluster-1.kubeconfig kubectl get deployments,services,ingre
 
 The e2e tests can be executed locally by running the following commands:
 
+#### Terminal 1
+
+Start KCP and create KinD clusters
 ```bash
-# Start KCP and the KinD clusters
-$ make local-setup
-export KUBECONFIG=config/deploy/local/kcp.kubeconfig
-./bin/kubectl-kcp workspace use root:default:kcp-glbc
-./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin
-# Start KCP GLBC
-$ ./bin/kcp-glbc --kubeconfig .kcp/admin.kubeconfig --context system:admin --dns-provider fake
-# Run the e2e test suite
-$ make e2e
+make local-setup
+```
+
+#### Terminal 2
+
+Run the controller with the same environment as CI ([e2e](.github/workflows/e2e.yaml)):
+```bash
+(export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs) && \
+KUBECONFIG=./tmp/kcp.kubeconfig ./bin/kcp-glbc)
+```
+
+#### Terminal 3
+
+Run the e2e tests:
+
+```bash
+(export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs) && \
+export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig && \
+export CLUSTERS_KUBECONFIG_DIR="$(pwd)/tmp" && \
+make e2e)
+```
+
+Run the performance tests:
+
+```bash
+(export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs) && \
+export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig &&
+make performance TEST_DNSRECORD_COUNT=1 TEST_INGRESS_COUNT=1)
 ```
 
 Alternatively, You can run the KCP GLBC and/or the tests from your IDE / debugger.
@@ -116,3 +139,4 @@ $ sudo brew services start chipmk/tap/docker-mac-net-connect
 This is done automatically as part of the `make local-setup` but will require presenting a sudo password to start the service if it is not configured to autostart.
 
 N.B. This does not remove the requirement to have the DNS records created in a valid DNS service (e.g. route53 in AWS).
+

@@ -1,0 +1,55 @@
+// begin header
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+:numbered:
+:toc: macro
+:toc-title: pass:[<b>Table of Contents</b>]
+// end header
+= SLOIngressAdmissionLatency
+
+toc::[]
+
+== Description
+
+The various SLOIngressAdmissionLatency ErrorBudgetBurn alerts follow the best practice for alerting on SLOs as described in the https://sre.google/workbook/alerting-on-slos/[SRE Workbook]. The format of the alert name includes the short & long alert windows e.g. 5m1h for a 5 minute short window & 1 hour long window. If one of these alerts is firing, it is a signal that the error budget is being burned at a rate that will see it exhausted soon. The severity of the alert is `critical`` for burn rates that would need immediate action. For a lower, but sustained rate of burn (e.g. exhausation in 3 days), a `warning` severity is used. Due to the long time ranges used for data in these alerts, and the different terms (burn rate, windows, error budget) it can be confusing at first as to why an alert is firing, or continuing to fire after a problem has been resolved. In general, the longer the window used for an alert, the longer it will take for an alert to have sufficient 'good' data before it stops firing again. The SRE Workbook explains this best.
+
+The metric used for these alerts is the histogram `glbc_ingress_managed_object_time_to_admission`.
+The `glbc_ingress_managed_object_time_to_admission_bucket` metric has an `le` (less than or equal) label for different time buckets, in seconds. They catch Ingress admission times from start to finish. That is, from when the GLBC first saw the Ingress all the way through to the DNS host being set up and TLS certificate secret being created in the target workload cluster. The `glbc_ingress_managed_object_time_to_admission_count` metric holds a count on the total number of admissions. A burn rate calculation uses these 2 metrics e.g. :
+
+[source]
+----
+          1 - (
+              rate(glbc_ingress_managed_object_time_to_admission_bucket{le="120"}[5m]))
+              /
+              rate(glbc_ingress_managed_object_time_to_admission_count[5m]))
+          )
+----
+
+So if the rate of admissions over the last 5 minutes was 20 per second, and the rate of admissions that took less than 2 minutes (120 seconds) was 15 per second, the burn rate is 1 - (15 / 20), or 1 - 0.75 = 0.25 .
+
+These alerts cover a lot of moving parts. This is deliberate to capture what users will care about most i.e. their ingress gets set up correctly and they can send traffic to their service.
+This can make initial troubleshooting slow. However, there are usually other 'cause based' alerts firing at the same time that should help narrow down the problem.
+
+== Prerequisites
+
+* Access to the physical cluster where GLBC should be running
+
+== Execute/Resolution
+
+First check if there are any other firing alerts. The SLO Alerts are 'symptom based alerts', which means they are indicating there is a problem from the users point of view. The actual cause may not be obvious without doing additional troubleshooting.
+The SLO covers a number of different moving parts, such as creating a DNS record, requesting a TLS certificate to be signed and various API calls to the control plane (KCP). The cause could be with any of controllers in glbc, the configuratino for them, or the service they depend on (like Route 53 or Lets Encrypt). 
+
+If other firing alerts are not giving sufficient information or there are no other firing alerts, the next most useful thing is to review recent logs. There may be errors that are currently not captured in an alerting rule. Review any errors or warning logs first for signs of misbehaviour, communication issues or misconfiguration. Failing that, it may be useful to check lesser level logs and any kubernetes events for hints on what may be going wrong.
+
+It can also be helpful to narrow time a time frame for when the problem started to happen. The GLBC Overview dashboard in Grafana can help with that by showing any error spikes, high load, or graphs that no longer follow a pattern (fall off a cliff or rise sharply). Absence of data or gaps in a graph can also indicate a problem.
+
+== Validate
+
+Note that any change that attempts to fix the problem may stop a 'cause based' alert firing, but the SLO 'symptom based alert' could continue firing for some time. The actual time depends on how fast the error budget had been burning, and the short window time for the firing alert(s). It is better to look for a downward tendency in a graph of the alert metric as an indicator the issue may be resolved. The easiest way to see such a graph is to click on the alert expression in the Prometheus Alerts tab, which will then open it in the Graph tab.
+
+After the short window has elapsed some time later, you can verify the SLO alert has stopped firing.

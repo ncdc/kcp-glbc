@@ -1,0 +1,47 @@
+[[monitoring-resources]]
+= Monitoring Resources
+
+The different montioring resources used are:
+
+- PodMonitors
+- PrometheusRules
+- GrafanaDashboards (or ConfigMaps in plain k8s)
+
+The source of truth for these resources is in `config/observability/monitoring_resources`.
+There is a make target called `gen-monitoring-resources` that takes the contents of that directory and outputs resources in the following locations:
+
+- `config/observability/kubernetes`
+- `config/observability/openshift`
+
+The output resources differ slightly to allow working with the different monitoring stack setups in plain kubernetes vs. openshift.
+This generation also allows for variable template if you want different values for things like alert thresholds.
+There is another make target called `verify-gen-monitoring-resources`, which runs in the CI job to ensure the generated files are up to date.
+
+= Adding a new Alert rule
+
+First, generate the alert rule scaffoling for the new alert rule:
+
+[source,bash]
+----
+make gen-new-alert-rule ALERT_NAME=MyAlert
+----
+
+Check the output of this command for useful info on what the generated files are and what you should do with them.
+In general, whenever you make a change to the source of the alert rule (e.g. `config/observability/monitoring_resources/common/rules/MyAlert.dhall`),
+you should regenerate the rules & PrometheusRule CR yaml with the `gen-monitoring-resources` target.
+Then re-run the `deploy-observability.sh` script to apply the rule changes to your local development cluster.
+The prometheus-operator will detect the changes to the PrometheusRule CR and apply them fairly quickly.
+You easiest way to check if you changes are applied is in the Alerts tab of the Prometheus UI.
+
+If you prefer, you can modify the raw PrometheusRule CR and apply the changes to your cluster during development for a slightly quicker dev cycle turnaround.
+The Graph tab in the Prometheus UI is also very useful for testing & tweaking promql queries until you have the right expression.
+Once you're happy with the Alert rule expression, make sure the source dhall file for you alert rule is updated with it (along with any other fields like the description and severity). Then run `make gen-monitoring-resources` and check in the generated files.
+
+You will need to write a unit test for your alert rule.
+A skeleton test file will have been generated for you to flesh out.
+Unit tests can be run with the `prometheus-rules-unit-test` target.
+
+All alerts must have a 'runbook' (or sometimes called a Standard Operating Procedure or SOP).
+A skeleton runbook will have been generated for you.
+This runbook is linked from an annotation on the alert rule.
+Add any relevant details, commands etc.. that will help troubleshoot & fix the alert cause when it fires.

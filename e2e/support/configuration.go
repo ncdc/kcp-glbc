@@ -26,10 +26,10 @@ import (
 	networkingv1apply "k8s.io/client-go/applyconfigurations/networking/v1"
 )
 
-func IngressConfiguration(namespace, name string) *networkingv1apply.IngressApplyConfiguration {
+func IngressConfiguration(namespace, name, host string) *networkingv1apply.IngressApplyConfiguration {
 	return networkingv1apply.Ingress(name, namespace).WithSpec(
 		networkingv1apply.IngressSpec().WithRules(networkingv1apply.IngressRule().
-			WithHost("test.gblb.com").
+			WithHost(host).
 			WithHTTP(networkingv1apply.HTTPIngressRuleValue().
 				WithPaths(networkingv1apply.HTTPIngressPath().
 					WithPath("/").

@@ -1,6 +1,8 @@
 package metadata
 
 import (
+	"strings"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -34,4 +36,18 @@ func HasFinalizer(obj metav1.Object, finalizer string) bool {
 	}
 
 	return false
+}
+
+func HasFinalizersContaining(obj metav1.Object, key string) (bool, []string) {
+	finalizers := obj.GetFinalizers()
+	if finalizers == nil {
+		return false, []string{}
+	}
+	var matches []string
+	for _, finalizer := range finalizers {
+		if strings.Contains(finalizer, key) {
+			matches = append(matches, finalizer)
+		}
+	}
+	return len(matches) > 0, matches
 }
