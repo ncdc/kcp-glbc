@@ -55,6 +55,12 @@ KUBECTL_KCP_BIN="./bin/kubectl-kcp"
 : ${KCP_VERSION:="release-0.8"}
 KCP_SYNCER_IMAGE="ghcr.io/kcp-dev/kcp/syncer:${KCP_VERSION}"
 
+#Check that KUBECONFIG is not set to .kcp/admin.kubeconfig
+if [[ $KUBECONFIG == "${KUBECONFIG_KCP_ADMIN}" ]] ; then
+  echo "Can NOT add physical clusters (kind) if KUBECONFIG is set to .kcp/admin.kubeconfig"
+  exit 1 #this will trigger cleanup function
+fi
+
 crc start -p $PULL_SECRET
 
 cp ~/.crc/machines/crc/kubeconfig ${TEMP_DIR}/${CRC_KUBECONFIG}

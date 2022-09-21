@@ -2,12 +2,12 @@
 
 The Global Load Balancer Controller (GLBC) leverages [`kcp`](https://github.com/Kuadrant/kcp) to provide DNS-based global load balancing and transparent multi-cluster ingress. The main API for the GLBC is the Kubernetes Ingress object. GLBC watches Ingress objects and transforms them adding in the GLBC managed host and TLS certificate.
 
-For more information on the architecture of GLBC and how the various component work, refer to the [overview documentation](https://github.com/Kuadrant/kcp-glbc/blob/bb8e43639691568b594720244a0c94a23470a587/docs/getting_started/overview.md).
+For more information on the architecture of GLBC and how the various component work, refer to the [overview documentation](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/getting_started/overview.md).
 
 Use this tutorial to perform the following actions:
 
 * Install the kcp-glbc instance and verify installation.
-* Follow the demo and have GLBC running and working with an AWS domain. You can then deploy the sample service to view how GLBC allows access to services  in a multi-cluster ingress scenario.
+* Follow the demo and have GLBC running and working with an AWS domain. You can then deploy the sample service to view how GLBC allows access to services in a multi-cluster ingress scenario.
 
 <br>
 
@@ -31,10 +31,10 @@ Use this tutorial to perform the following actions:
 
 ## Installation
 
-Clone the repo and run the following command:
+Clone the repo. You would need to set `NUM_CLUSTERS=2`. Run the following command:
 
 ```bash
-make local-setup
+NUM_CLUSTERS=2 make local-setup
 ```
 > NOTE: If errors are encountered during the local-setup, refer to the [Troubleshooting Installation](https://github.com/Kuadrant/kcp-glbc/blob/main/docs/troubleshooting.md) document.
 
@@ -64,31 +64,32 @@ For the demo, before deploying GLBC, we will want to provide it with your AWS cr
 The easiest way to do this is to perform the following steps:
 
 1. Open the `kcp-glbc` project in your IDE.
-1. Navigate to the `./config/deploy/local/aws-credentials.env` environment file.
+1. Navigate to the `./config/deploy/local/kcp-glbc/aws-credentials.env` environment file.
 1. Enter your `AWS access key ID` and `AWS Secret Access Key` as indicated in the example below:
   
      ```bash
       AWS_ACCESS_KEY_ID=EXAMPLEID2DJ3rSA3E
       AWS_SECRET_ACCESS_KEY=EXAMPLEKEYIEI034+fETFDS34QFAD0IAO
       ```
-1. Navigate to `./config/deploy/local/controller-config.env` and change the fields to resemble something similar to following:
+1. Navigate to `./config/deploy/local/kcp-glbc/controller-config.env` and change the fields to resemble something similar to following:
 
    ```bash
-   AWS_DNS_PUBLIC_ZONE_ID=Z0485348LD348SDHJSR0
+   AWS_DNS_PUBLIC_ZONE_ID=Z0668753LU5S8CXOSZR0
+   GLBC_ADVANCED_SCHEDULING=true
    GLBC_DNS_PROVIDER=aws
    GLBC_DOMAIN=cz.hcpapps.net
-   GLBC_ENABLE_CUSTOM_HOSTS=false
+   GLBC_ENABLE_CUSTOM_HOSTS=true
+   GLBC_EXPORT=glbc-root-kuadrant
    GLBC_LOGICAL_CLUSTER_TARGET=*
    GLBC_TLS_PROVIDED=true
    GLBC_TLS_PROVIDER=glbc-ca
+   GLBC_WORKSPACE=root:kuadrant
    HCG_LE_EMAIL=kuadrant-dev@redhat.com
    NAMESPACE=kcp-glbc
-   GLBC_WORKSPACE=root:kuadrant
    ```
 
    The fields that might need to be edited include:
      - Replace `<AWS_DNS_PUBLIC_ZONE_ID>` with your own hosted zone ID
-     - Replace `<GLBC_DNS_PROVIDER>` with `aws`
      - Replace `<GLBC_DOMAIN>` with your specified subdomain
 
 <br>
@@ -102,10 +103,10 @@ After all the above is configured correctly, for the demo, we can run the first 
           cd to/the/repo
    ```
 
-Using the same tab in the terminal, run the following command to run GLBC and use `controller-config.env` and `aws-credentials.env`. We will be able to curl the domain in the tutorial and visualize how the workload migrates from `cluster-1` to `cluster-2`.
+Using the same tab in the terminal, run the following command to run GLBC and use `controller-config.env` and `aws-credentials.env`. We will be able to curl the domain in the tutorial and visualize how the workload migrates from `kcp-cluster-1` to `kcp-cluster-2`.
 
    ```bash
-   (export $(cat ./config/deploy/local/controller-config.env | xargs) && export $(cat ./config/deploy/local/aws-credentials.env | xargs) && KUBECONFIG=./tmp/kcp.kubeconfig ./bin/kcp-glbc)
+   (export $(cat ./config/deploy/local/kcp-glbc/controller-config.env | xargs) && export $(cat ./config/deploy/local/kcp-glbc/aws-credentials.env | xargs) && KUBECONFIG=./tmp/kcp.kubeconfig ./bin/kcp-glbc)
    ```
 
 <br>
@@ -119,7 +120,34 @@ Now we will attempt to deploy the sample service. You can do this by running the
    ```
 After the sample service has been deployed, we are presented with the following output of what was done, and some useful commands:
 
-![Screenshot from 2022-08-02 12-22-17](https://user-images.githubusercontent.com/73656840/182363020-6aa61b73-c2a7-4570-ada7-aae97ad9db00.png)
+```bash
+before running this script, ensure that you have set the flag --advanced-scheduling=true when starting GLBC
+Press enter to continue
+Current workspace is "root:kuadrant" (type "root:universal").
+creating locations for sync targets in root:kuadrant workspace
+location.scheduling.kcp.dev/kcp-location-1 created
+location.scheduling.kcp.dev/kcp-location-2 created
+creating placement in home workspace
+Current workspace is "root:users:zu:yc:kcp-admin".
+creating apibindings in home workspace
+apibinding.apis.kcp.dev/kubernetes created
+apibinding.apis.kcp.dev/glbc created
+placement.scheduling.kcp.dev/placement-1 created
+placement.scheduling.kcp.dev "default" deleted
+deploying workload resources in home workspace
+service/echo created
+deployment.apps/echo created
+ingress.networking.k8s.io/echo created
+
+=== useful commands:
+  - watch -n1 "curl -k https://ccdncilkjgm3i9jmt6c0.cz.hcpapps.net" (N.B. Don't start this before A record exists in route53)
+  - watch -n1 'kubectl get dnsrecords echo -o yaml | yq eval ".spec" -'
+  - watch -n1 'dig ccdncilkjgm3i9jmt6c0.cz.hcpapps.net'
+  - watch -n1 -d 'kubectl get ingress echo -o yaml | yq eval ".metadata" - | grep -v "kubernetes.io"'
+
+
+Press enter to trigger migration from kcp-cluster-1 to kcp-cluster-2
+```
 
 
 The sample script will remain paused until we press the enter key to migrate the workload from one cluster to the other. However, we will not perform this action just yet.
@@ -131,19 +159,19 @@ The sample script will remain paused until we press the enter key to migrate the
 1. In a new terminal, verify that the ingress was created after deploying the sample service:
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
-   ./bin/kubectl-kcp workspace use root:kuadrant
+   ./bin/kubectl-kcp workspace use '~'
    kubectl get ingress
    ```
    ```bash
-   NAME                AGE
-   ingress-nondomain   81s
+   NAME       AGE
+   echo       81s
    ```
 
 1. Verify that the DNS record was created:
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
-   ./bin/kubectl-kcp workspace use root:kuadrant
-   kubectl get dnsrecords ingress-nondomain -o yaml
+   ./bin/kubectl-kcp workspace use '~'
+   kubectl get dnsrecords echo -o yaml
    ```
    We might not get an output just yet until the DNS record exists in `route53`. This may take several minutes.
 
@@ -159,7 +187,7 @@ The sample script will remain paused until we press the enter key to migrate the
 
 This section will show how GLBC is used to provide ingress in a multi-cluster ingress scenario.
 
-For this tutorial, after following along the with the [Installation](#installation) section of this document, we should already have `kcp` and GLBC running, and also have had deployed the sample service which would have created a placement resource, an ingress named *"ingress-nondomain"* and a DNS record. Note, the "default" namespace is where we are putting all the sample resources at the moment.
+For this tutorial, after following along the with the [Installation](#installation) section of this document, we should already have `kcp` and GLBC running, and also have had deployed the sample service which would have created a placement resource, an ingress named *"echo"* and a DNS record. Note, the "default" namespace is where we are putting all the sample resources at the moment.
 
 <br>
 
@@ -169,14 +197,12 @@ We will run the following commands in a new tab:
 
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
-   ./bin/kubectl-kcp workspace use root:kuadrant
+   ./bin/kubectl-kcp workspace use '~'
    kubectl get ns default -o yaml
    ```
-As we can see, there is a label named: `*state.internal.workload.kcp.dev/kcp-cluster-1: Sync*`:
+As we can see, there is a label named something like: `*state.workload.kcp.dev/5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn: Sync*`:
 
-   ![Screenshot from 2022-08-02 12-32-06](https://user-images.githubusercontent.com/73656840/182365628-22f04bb5-0818-46a3-8a12-3abc2e8451f3.png)
-
-GLBC is telling `kcp` where to sync all of the work resources in the namespace. Meaning, since the namespace is is set to `kcp-cluster-1` , the ingress will also have `kcp-cluster-1` set to it. 
+GLBC is telling `kcp` where to sync all of the work resources in the namespace. Meaning, since the `state` label in the namespace is set to `5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn` (kcp-cluster-1) , the `state` label in the ingress will also have `5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn` (kcp-cluster-1) set to it. 
 
 <br>
 
@@ -186,28 +212,28 @@ We can run the watch command in a new tab to start watching the ingress:
 
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
-   ./bin/kubectl-kcp workspace use root:kuadrant
-   watch -n1 -d 'kubectl get ingress ingress-nondomain -o yaml | yq eval ".metadata" - | grep -v "kubernetes.io"'
+   ./bin/kubectl-kcp workspace use '~'
+   watch -n1 -d 'kubectl get ingress echo -o yaml | yq eval ".metadata" - | grep -v "kubernetes.io"'
    ```
 
 As we can see in the first annotation, the load balancer for `kcp-cluster-1` will have an IP address, after the DNS record is created:
 
-   ![Screenshot from 2022-08-02 12-40-48](https://user-images.githubusercontent.com/73656840/182366116-aa2f32ce-a603-49bb-b974-e9356c71c6fc.png)
+   ![Screenshot from 2022-09-09 19-11-06](https://user-images.githubusercontent.com/73656840/189416748-fb94527e-509c-44c0-b680-300691721acb.png)
 
 
 Alternatively, we can also run the following command in another tab to start watching the DNS record in real-time:
 
    ```bash
    export KUBECONFIG=.kcp/admin.kubeconfig                                         
-   ./bin/kubectl-kcp workspace use root:kuadrant
-   watch -n1 'kubectl get dnsrecords ingress-nondomain -o yaml | yq eval ".spec" -'
+   ./bin/kubectl-kcp workspace use '~'
+   watch -n1 'kubectl get dnsrecords echo -o yaml | yq eval ".spec" -'
    ```
    
 <br>
 
 #### Curl the running domain
 
-Now that the DNS record has been successfully created, in a new tab in the terminal, we can curl the domain to view it. To do this, we will run the following watch command that is outputs to our termial and will look similar to the following:
+Now that the DNS record has been successfully created, in a new tab in the terminal, we can curl the domain to view it. To do this, we will run the following watch command that is outputs to our terminal and will look similar to the following:
 
    ```bash
    watch -n1 "curl -k https://cbkgg75kjgmah1mbpvsg.cz.hcpapps.net"
@@ -217,36 +243,36 @@ Now that the DNS record has been successfully created, in a new tab in the termi
 
    ![Screenshot from 2022-08-02 12-44-15](https://user-images.githubusercontent.com/73656840/182368772-8a08a197-66d9-4d9c-9747-74ddaad0e4d7.png)
 
-This means that `kcp-cluster-1` is up and running correctly.
+This means that kcp-cluster-1 is up and running correctly.
 
 <br>
 
-#### Migrating workload from `kcp-cluster-1` to `kcp-cluster-2`
+#### Migrating workload from one cluster to another cluster
 
 As we continue with the following steps, we will want to be observing the tab where we are watching our domain. This way, we will notice that during the workload migration, there is no interruptions and no down time.
 
-To proceed with the workload migration, we will go to the tab where we deployed the sample service, and press the enter key to "trigger migration from `kcp-cluster-1` to `kcp-cluster-2`. This deletes `placement-1` and creates `placement-2` which points to `kcp-cluster-2`. This will also change the label in the "default" namespace mentioned before: `*state.internal.workload.kcp.dev/kcp-cluster-1: Sync*`, and change it from `kcp-cluster-1` to `kcp-cluster-2`.
+To proceed with the workload migration, we will go to the tab where we deployed the sample service, and press the enter key to "trigger migration from `kcp-cluster-1` to `kcp-cluster-2`. This deletes `placement-1` and creates `placement-2` which points to `kcp-cluster-2`. This will also change the label in the "default" namespace mentioned before: `*state.internal.workload.kcp.dev/5MivhNIs7DjM7dK95I2K7TpWe7aUGMU4WHqjWn: Sync*` to the other cluster.
 
-   ![Screenshot from 2022-08-02 12-48-05](https://user-images.githubusercontent.com/73656840/182367670-dc6c243d-aea7-44e9-bebf-99685391d931.png)
+   ![Screenshot from 2022-09-09 19-26-36](https://user-images.githubusercontent.com/73656840/189419200-17dd3086-82f1-4bf7-ae95-70bc4f3e8b87.png)
 
 
 In the tab where we are watching the ingress, we can observe that the label in the ingress has changed from `kcp-cluster-1` to `kcp-cluster-2`. KCP has propagated that label down from the namespace to everything in it. Everything in the namespace gets the same label. Because of that label, `kcp` is syncing it to `kcp-cluster-2`.
 
-   ![Screenshot from 2022-08-02 12-51-37](https://user-images.githubusercontent.com/73656840/182367915-5de8acef-4c77-4c09-a1b9-049c2605ce12.png)
+   ![Screenshot from 2022-09-09 19-22-43](https://user-images.githubusercontent.com/73656840/189418521-66a70b94-4f7e-47de-bbd0-1987d0a2dcce.png)
 
 
 Moreover, in the annotations we also have a status there for `kcp-cluster-2` and it has an IP address in it meaning that it has indeed synced to `kcp-cluster-2`. We will also find another annotation named "*deletion.internal.workload.kcp.dev/kcp-cluster-1*", which is code coming from the GLBC which is saying "Don't remove this work from `kcp-cluster-1` until the DNS has propagated."
 
 For that reason we can also observe another annotation named "*finalizers.workload.kcp.dev/kcp-cluster-1: kuadrant.dev/glbc-migration*" which remains there because GLBC is saying to `kcp` "Don't get rid of this yet, as we're waiting for it to come up to another cluster before you remove it from `kcp-cluster-1`. After it has completely migrated and sufficient time has been allowed for DNS propagation, the finalizer for `kcp-cluster-1` will no longer be there and the workload will be deleted from `kcp-cluster-1`. Account for the DNS propagation time of the TTL (usually 60 seconds) * 2.
 
-   ![Screenshot from 2022-08-02 12-49-21](https://user-images.githubusercontent.com/73656840/182368360-0bb65282-1751-44ea-a9da-7cfbe508e084.png)
+   ![Screenshot from 2022-09-09 19-25-07](https://user-images.githubusercontent.com/73656840/189418887-2efd4977-17dc-4d1e-b888-ca32b58d862a.png)
 
 
 We will notice that in the tab where we are curling the domain, we will always be getting a response back because the graceful migration is active. Meaning, even after the workload has been migrated, and the DNS record is updated, we will keep receiving a response without any interruption even after `kcp-cluster-1` has been deleted. This can be observed in our curl:
 
    ![Screenshot from 2022-08-02 12-55-24](https://user-images.githubusercontent.com/73656840/182368597-1ec0ade2-9849-4414-849f-ac342680d11b.png)
 
-This shows that the workload has successfully migrated from `cluster-1` to `cluster-2` without any interruption.
+This shows that the workload has successfully migrated from `kcp-cluster-1` to `kcp-cluster-2` without any interruption.
 
 <br>
 
@@ -254,4 +280,4 @@ This shows that the workload has successfully migrated from `cluster-1` to `clus
 
 After finishing with this tutorial, we can go back to our tab where we deployed the sample service, and press the enter key to reset and undo everything that was done from running the sample.
 
-   ![Screenshot from 2022-08-02 13-04-27](https://user-images.githubusercontent.com/73656840/182370379-4e5af83b-6ad9-4b2d-9b11-8be18edff290.png)
+   ![Screenshot from 2022-09-09 19-29-44](https://user-images.githubusercontent.com/73656840/189419668-cb3d8d67-34ef-4148-8df1-f54fdb4bf196.png)

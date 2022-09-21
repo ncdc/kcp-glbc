@@ -17,7 +17,8 @@
 #
 
 export KUBECONFIG=./.kcp/admin.kubeconfig
-BASE_WORKSPACE=root:kuadrant
+GLBC_WORKSPACE=root:kuadrant
+HOME_WORKSPACE='~'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 
@@ -27,34 +28,36 @@ echo "before running this script, ensure that you have set the flag --advanced-s
 read -p "Press enter to continue"
 
 
-kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user-compute
-
-echo "creating locations for sync targets in compute workspace"
+kubectl kcp workspace ${GLBC_WORKSPACE}
+echo "creating locations for sync targets in root:kuadrant workspace"
 kubectl apply -f ${SCRIPT_DIR}/locations.yaml
 
-echo "creating placement in user workspace"
-kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user
+echo "creating placement in home workspace"
+kubectl kcp workspace ${HOME_WORKSPACE}
+echo "creating apibindings in home workspace"
+kubectl apply -f ./config/apiexports/kubernetes/kubernetes-apibinding.yaml
+kubectl apply -f ./config/deploy/local/kcp-glbc/apiexports/glbc/glbc-apibinding.yaml
 kubectl apply -f ${SCRIPT_DIR}/placement-1.yaml
 kubectl delete placement default
 
-echo "deploying workload resources in user workspace"
+echo "deploying workload resources in home workspace"
 kubectl apply -f ${SCRIPT_DIR}/../echo-service/echo.yaml
 
 sleep 2
 
 echo
 echo "=== useful commands:"
-echo "  - watch -n1 \"curl -k https://"$(kubectl get ingress ingress-nondomain -o json | jq ".metadata.annotations[\"kuadrant.dev/host.generated\"]" -r)"\" (N.B. Don't start this before A record exists in route53)"
-echo "  - watch -n1 'kubectl get dnsrecords ingress-nondomain -o yaml | yq eval \".spec\" -'"
-echo "  - watch -n1 'dig "$(kubectl get ingress ingress-nondomain -o json | jq ".metadata.annotations[\"kuadrant.dev/host.generated\"]" -r)"'"
-echo "  - watch -n1 -d 'kubectl get ingress ingress-nondomain -o yaml | yq eval \".metadata\" - | grep -v \"kubernetes.io\"'"
+echo "  - watch -n1 \"curl -k https://"$(kubectl get ingress echo -o json | jq ".metadata.annotations[\"kuadrant.dev/host.generated\"]" -r)"\" (N.B. Don't start this before A record exists in route53)"
+echo "  - watch -n1 'kubectl get dnsrecords echo -o yaml | yq eval \".spec\" -'"
+echo "  - watch -n1 'dig "$(kubectl get ingress echo -o json | jq ".metadata.annotations[\"kuadrant.dev/host.generated\"]" -r)"'"
+echo "  - watch -n1 -d 'kubectl get ingress echo -o yaml | yq eval \".metadata\" - | grep -v \"kubernetes.io\"'"
 echo
 echo
 
 read -p "Press enter to trigger migration from kcp-cluster-1 to kcp-cluster-2"
 
-echo "creating placement 2 in user workspace"
-kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user
+echo "creating placement 2 in home workspace"
+kubectl kcp workspace ${HOME_WORKSPACE}
 kubectl create -f ${SCRIPT_DIR}/placement-2.yaml
 kubectl delete placement placement-1
 
@@ -65,10 +68,8 @@ echo "resetting placement"
 kubectl apply -f ${SCRIPT_DIR}/reset-placement.yaml
 kubectl delete placement placement-2
 
-echo "deleting locations"
-kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user-compute
-
-echo "deleting locations for sync targets in compute workspace"
+kubectl kcp workspace ${GLBC_WORKSPACE}
+echo "deleting locations for sync targets in root:kuadrant workspace"
 kubectl delete -f ${SCRIPT_DIR}/locations.yaml
 
-kubectl kcp workspace ${BASE_WORKSPACE}:kcp-glbc-user
+kubectl kcp workspace ${HOME_WORKSPACE}

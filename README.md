@@ -26,15 +26,9 @@ This script will:
 - build all the binaries
 - deploy three kubernetes 1.22 clusters locally using `kind`.
 - deploy and configure the ingress controllers in each cluster.
+- download kcp at the latest version integrated with GLBC
 - start the KCP server.
-- create KCP workspaces for glbc and user resources:
-  - kcp-glbc
-  - kcp-glbc-compute
-  - kcp-glbc-user
-  - kcp-glbc-user-compute
-- add workload clusters to the *-compute workspaces
-  - kcp-glbc-compute: 1x  kind cluster
-  - kcp-glbc-user-compute: 2x kind clusters
+- add Kind clusters as sync targets
 - deploy glbc dependencies (cert-manager) into kcp-glbc workspace.
     
 
@@ -68,7 +62,6 @@ With a running local setup i.e. you have successfully executed `make local-setup
 $ kubectl get synctargets -o wide
 NAME              LOCATION          READY   SYNCED API RESOURCES
 kcp-cluster-1     kcp-cluster-1     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
-kcp-cluster-2     kcp-cluster-2     True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
 kcp-cluster-crc   kcp-cluster-crc   True    ["deployments.apps","ingresses.networking.k8s.io","secrets","services"]
 ```
 

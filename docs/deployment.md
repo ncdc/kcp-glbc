@@ -30,7 +30,7 @@ The exact command will be output as part of the deploy script, but will look som
 ```
 # targeting your physical cluster run:
 
-kubectl apply -f ./config/deploy/local/glbc-syncer.yaml
+kubectl apply -f ./config/deploy/sync-targets/kcp-cluster-1-syncer.yaml
 ```
 
 Verify the workload cluster becomes ready:
@@ -40,7 +40,7 @@ Verify the workload cluster becomes ready:
 ./bin/kubectl-kcp ws root:<target workspace>
  $ kubectl get synctargets -o wide
 NAME            LOCATION        READY   SYNCED API RESOURCES   KEY                                      AGE
-glbc            glbc            True                           832Kocbfr9pZCD62hs7bt3No2aylrt9lYwTJYa   46m
+kcp-cluster-1   kcp-cluster-1   True                           832Kocbfr9pZCD62hs7bt3No2aylrt9lYwTJYa   46m
 ```
 N.B. It can take a couple of minutes for it go into a "ready" state.
 
@@ -95,19 +95,20 @@ default during installation containing the default values, but can be replaced b
 kubectl -n kcp-glbc edit configmap kcp-glbc-controller-config
 ```
 
-| Annotation | Description | Default value |
-| ---------- | ----------- | ------------- |
-| `AWS_DNS_PUBLIC_ZONE_ID` |  AWS hosted zone id where route53 records will be created (default is dev.hcpapps.net) | Z08652651232L9P84LRSB |
-| `GLBC_ADVANCED_SCHEDULING` | Enable advanced scheduling | false |
-| `GLBC_DNS_PROVIDER` |  The dns provider to use, one of [aws, fake] | fake |
-| `GLBC_DOMAIN` |  The domain to use when exposing ingresses via glbc | dev.hcpapps.net |
-| `GLBC_ENABLE_CUSTOM_HOSTS` | Allow custom hosts in glbc managed ingresses | false |
+| Annotation                    | Description | Default value |
+|-------------------------------| ----------- | ------------- |
+| `AWS_DNS_PUBLIC_ZONE_ID`      |  AWS hosted zone id where route53 records will be created (default is dev.hcpapps.net) | Z08652651232L9P84LRSB |
+| `GLBC_ADVANCED_SCHEDULING`    | Enable advanced scheduling | false |
+| `GLBC_DNS_PROVIDER`           |  The dns provider to use, one of [aws, fake] | fake |
+| `GLBC_DOMAIN`                 |  The domain to use when exposing ingresses via glbc | dev.hcpapps.net |
+| `GLBC_ENABLE_CUSTOM_HOSTS`    | Allow custom hosts in glbc managed ingresses | false |
+| `GLBC_EXPORT`                 | The name of the glbc api export to use | glbc-root-kuadrant |
 | `GLBC_LOGICAL_CLUSTER_TARGET` | logical cluster to target | `*` |
-| `GLBC_TLS_PROVIDED` | Generate TLS certs for glbc managed hosts | false |
-| `GLBC_TLS_PROVIDER` | The TLS certificate issuer | glbc-ca |
-| `GLBC_WORKSPACE` | The GLBC workspace| root:kuadrant |
-| `HCG_LE_EMAIL` | Email address to use during LE cert requests | kuadrant-dev@redhat.com |
-| `NAMESPACE` | Target namespace of cert-manager resources (issuers, certificates) | kcp-glbc |
+| `GLBC_TLS_PROVIDED`           | Generate TLS certs for glbc managed hosts | false |
+| `GLBC_TLS_PROVIDER`           | The TLS certificate issuer | glbc-ca |
+| `GLBC_WORKSPACE`              | The GLBC workspace| root:kuadrant |
+| `HCG_LE_EMAIL`                | Email address to use during LE cert requests | kuadrant-dev@redhat.com |
+| `NAMESPACE`                   | Target namespace of cert-manager resources (issuers, certificates) | kcp-glbc |
 
 ### Applying configuration changes
 

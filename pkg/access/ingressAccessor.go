@@ -82,7 +82,6 @@ func (a *IngressAccessor) RemoveTLS(hosts []string) {
 func (a *IngressAccessor) ReplaceCustomHosts(managedHost string) []string {
 	var customHosts []string
 	for i, rule := range a.Spec.Rules {
-		fmt.Printf("analyzing rule with host '%v' against managed host: '%v'", rule.Host, managedHost)
 		if rule.Host != managedHost {
 			a.Spec.Rules[i].Host = managedHost
 			customHosts = append(customHosts, rule.Host)

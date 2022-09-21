@@ -2,6 +2,7 @@ package reconcilers
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -79,7 +80,7 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor access.Accessor)
 		}
 	}
 
-	//no non-deleting hosts have an IP yet, so continue using IPs of "losing" clusters
+	// no non-deleting hosts have an IP yet, so continue using IPs of "losing" clusters
 	if len(activeDNSTargetIPs) == 0 && len(deletingTargetIPs) > 0 {
 		r.Log.V(3).Info("setting the dns Target to the deleting Target as no new dns targets set yet")
 		activeDNSTargetIPs = deletingTargetIPs
@@ -203,6 +204,10 @@ func (r *DnsReconciler) setEndpointFromTargets(dnsName string, dnsTargets map[st
 			newEndpoints = append(newEndpoints, endpoint)
 		}
 	}
+
+	sort.Slice(newEndpoints, func(i, j int) bool {
+		return newEndpoints[i].Targets[0] < newEndpoints[j].Targets[0]
+	})
 
 	dnsRecord.Spec.Endpoints = newEndpoints
 }

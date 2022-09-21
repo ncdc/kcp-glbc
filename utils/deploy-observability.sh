@@ -24,7 +24,7 @@ set -e pipefail
 
 PROMETHEUS_NAMESPACE=monitoring
 
-kubectl config use-context kind-kcp-cluster-glbc-control
+kubectl config use-context kind-kcp-cluster-1
 
 GLBC_NAMESPACE=$(kubectl get deployments --all-namespaces | grep -e kcp-glbc-controller-manager | awk '{print $1 }')
 
@@ -40,7 +40,7 @@ kubectl -n ${GLBC_NAMESPACE} apply -f config/observability/kubernetes/monitoring
 # Check kcp-glbc Prometheus config
 wait_for "kubectl -n ${PROMETHEUS_NAMESPACE} get secret prometheus-k8s -o json | jq -r '.data[\"prometheus.yaml.gz\"]'| base64 -d | gunzip | grep kcp-glbc" "kcp-glbc prometheus config" "1m" "10"
 
-ports=$(docker ps --format '{{json .}}' | jq 'select(.Names == "kcp-cluster-glbc-control-control-plane").Ports')
+ports=$(docker ps --format '{{json .}}' | jq 'select(.Names == "kcp-cluster-1-control-plane").Ports')
 httpport=$(echo $ports | sed -e 's/.*0.0.0.0\:\(.*\)->80\/tcp.*/\1/')
 
 # Check Prometheus Target

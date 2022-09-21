@@ -95,8 +95,8 @@ kcp-glbc       kcp-glbc-controller-manager   0/1     0            0           76
 It's not currently possible to check the logs via KCP, but you can view them by accessing the deployment on the kind cluster directly: 
 
 ```shell
-$ namespace=$(kubectl --context kind-kcp-cluster-glbc-control get deployments --all-namespaces | grep -e kcp-glbc-controller-manager | awk '{print $1 }')
-$ kubectl --kubeconfig ~/.kube/config --context kind-kcp-cluster-glbc-control logs -f deployments/kcp-glbc-controller-manager -n $namespace               
+$ namespace=$(kubectl --context kind-kcp-cluster-1 get deployments --all-namespaces | grep -e kcp-glbc-controller-manager | awk '{print $1 }')
+$ kubectl --kubeconfig ~/.kube/config --context kind-kcp-cluster-1 logs -f deployments/kcp-glbc-controller-manager -n $namespace               
 2022-06-20T09:59:47.622Z INFO runtime/proc.go:255 Creating TLS certificate provider {"issuer": "glbc-ca"}
 ....
 ```
@@ -119,9 +119,9 @@ Note: 'kubectl ws' now matches 'cd' semantics: go to home workspace. 'kubectl ws
 
 Create kubernetes and glbc APIBindings
 ```shell
-$ kubectl apply -f config/deploy/local/kcp-glbc/apiexports/root-kuadrant-kubernetes-apibinding.yaml
+$ kubectl apply -f config/apiexports/kubernetes/kubernetes-apibinding.yaml
 apibinding.apis.kcp.dev/kubernetes created
-$ kubectl apply -f config/deploy/local/kcp-glbc/apiexports/root-kuadrant-glbc-apibinding.yaml 
+$ kubectl apply -f config/deploy/local/kcp-glbc/apiexports/glbc/glbc-apibinding.yaml
 apibinding.apis.kcp.dev/glbc created
 ```
 
@@ -130,7 +130,7 @@ Deploy the echo service
 ```shell
 $ kubectl apply -f samples/echo-service/echo.yaml
 service/httpecho-both created
-deployment.apps/echo-deployment created
+deployment.apps/echo created
 ingress.networking.k8s.io/ingress-nondomain created
 ```
 
@@ -138,13 +138,13 @@ Check the deployment:
 ```shell
 $ kubectl get deployments -A
 NAMESPACE   NAME              READY   UP-TO-DATE   AVAILABLE   AGE
-default     echo-deployment   0/1     0            0           31s
+default     echo   0/1     0            0           31s
 ```
 
 Check what cluster was selected for the deployment:
 
 ```shell
-$ kubectl get deployment echo-deployment -n default -o json | jq .metadata.labels
+$ kubectl get deployment echo -n default -o json | jq .metadata.labels
 {
   "claimed.internal.apis.kcp.dev/23927525fc377edc1b0d643c368ef3e53": "23927525fc377edc1b0d643c368ef3e53f085ab6362ce2e608fc0552",
   "state.workload.kcp.dev/aSmDOEWMWf6IEqrPjoUAOgn0XNeFUa05deJjLB": "Sync"
@@ -153,7 +153,6 @@ $ ./bin/kubectl-kcp ws root:kuadrant
 Current workspace is "root:kuadrant" (type "root:universal").
 $ kubectl get synctargets -o wide
 NAME            LOCATION        READY   SYNCED API RESOURCES   KEY                                      AGE
-glbc            glbc            True                           832Kocbfr9pZCD62hs7bt3No2aylrt9lYwTJYa   36m
 kcp-cluster-1   kcp-cluster-1   True                           aSmDOEWMWf6IEqrPjoUAOgn0XNeFUa05deJjLB   34m
 kcp-cluster-2   kcp-cluster-2   True                           9o7VjBmvhoDPLl1txc7N6EaXcWyU5oxorBOXdp   34m
 ```
