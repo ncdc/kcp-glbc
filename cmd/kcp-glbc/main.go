@@ -81,8 +81,6 @@ var options struct {
 	MonitoringPort int
 	// The glbc exports to use
 	ExportName string
-
-	AdvancedScheduling bool
 }
 
 type APIExportClusterInformers struct {
@@ -105,8 +103,6 @@ func init() {
 	flagSet.StringVar(&options.Domain, "domain", env.GetEnvString("GLBC_DOMAIN", "dev.hcpapps.net"), "The domain to use to expose ingresses")
 	flagSet.BoolVar(&options.EnableCustomHosts, "enable-custom-hosts", env.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false), "Flag to enable hosts to be custom")
 	flag.StringVar(&options.DNSProvider, "dns-provider", env.GetEnvString("GLBC_DNS_PROVIDER", "fake"), "The DNS provider being used [aws, fake]")
-
-	flagSet.BoolVar(&options.AdvancedScheduling, "advanced-scheduling", env.GetEnvBool("GLBC_ADVANCED_SCHEDULING", false), "enabled the GLBC advanced scheduling integration")
 
 	// // AWS Route53 options
 	flag.StringVar(&options.Region, "region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
@@ -264,19 +260,18 @@ func main() {
 			ControllerConfig: &reconciler.ControllerConfig{
 				NameSuffix: name,
 			},
-			KCPKubeClient:             kcpKubeClient,
-			KubeClient:                kubeClient,
-			DnsRecordClient:           kcpKuadrantClient,
-			KuadrantInformer:          kcpKuadrantInformerFactory,
-			KCPSharedInformerFactory:  kcpKubeInformerFactory,
-			CertificateInformer:       certificateInformerFactory,
-			GlbcInformerFactory:       glbcKubeInformerFactory,
-			Domain:                    options.Domain,
-			CertProvider:              certProvider,
-			HostResolver:              dnsClient,
-			AdvancedSchedulingEnabled: options.AdvancedScheduling,
-			CustomHostsEnabled:        options.EnableCustomHosts,
-			GLBCWorkspace:             logicalcluster.New(options.GLBCWorkspace),
+			KCPKubeClient:            kcpKubeClient,
+			KubeClient:               kubeClient,
+			DnsRecordClient:          kcpKuadrantClient,
+			KuadrantInformer:         kcpKuadrantInformerFactory,
+			KCPSharedInformerFactory: kcpKubeInformerFactory,
+			CertificateInformer:      certificateInformerFactory,
+			GlbcInformerFactory:      glbcKubeInformerFactory,
+			Domain:                   options.Domain,
+			CertProvider:             certProvider,
+			HostResolver:             dnsClient,
+			CustomHostsEnabled:       options.EnableCustomHosts,
+			GLBCWorkspace:            logicalcluster.New(options.GLBCWorkspace),
 		})
 		controllers = append(controllers, ingressController)
 
@@ -324,8 +319,7 @@ func main() {
 		exitOnError(err, "Failed to create Deployment controller")
 
 		// Secret controller should not have more than one instance and is only needed if using advanced scheduling
-		if isControllerLeader && options.AdvancedScheduling {
-			log.Logger.Info("advanced scheduling enabled, starting secrets controllers")
+		if isControllerLeader {
 			secretController, err := secret.NewController(&secret.ControllerConfig{
 				ControllerConfig: &reconciler.ControllerConfig{
 					NameSuffix: name,
@@ -338,11 +332,8 @@ func main() {
 			controllers = append(controllers, secretController)
 		}
 
-		if options.AdvancedScheduling {
-			log.Logger.Info("advanced scheduling enabled, starting deployment and service controllers")
-			controllers = append(controllers, deploymentController)
-			controllers = append(controllers, serviceController)
-		}
+		controllers = append(controllers, deploymentController)
+		controllers = append(controllers, serviceController)
 
 		apiExportClusterInformers = append(apiExportClusterInformers, *clusterInformers)
 	}

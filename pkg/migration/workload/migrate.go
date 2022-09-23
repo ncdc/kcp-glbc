@@ -9,7 +9,9 @@ import (
 	"github.com/go-logr/logr"
 	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -25,9 +27,17 @@ const (
 	TTL                          = 60
 )
 
-func Migrate(obj metav1.Object, queue workqueue.RateLimitingInterface, logger logr.Logger) {
-	ensureSoftFinalizers(obj, logger)
-	gracefulRemoveSoftFinalizers(obj, queue, logger)
+// Process this is a temporary solution for advanced scheduling. It will add soft finalizer annotations to a set of objects to delay their deletion.
+// These are only paid attention to if advanced scheduling is on for a synctarget
+func Migrate(obj runtime.Object, queue workqueue.RateLimitingInterface, logger logr.Logger) {
+	metaob, err := meta.Accessor(obj)
+	if err != nil {
+		logger.Error(err, "failed to get metadata for obj ", obj)
+		return
+	}
+	ensureSoftFinalizers(metaob, logger)
+
+	gracefulRemoveSoftFinalizers(metaob, queue, logger)
 }
 
 // ensureSoftFinalizers ensure all active workload clusters have a soft finalizer set

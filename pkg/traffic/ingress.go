@@ -27,6 +27,14 @@ type Ingress struct {
 	*networkingv1.Ingress
 }
 
+func (a *Ingress) GetSyncTargets() []string {
+	return getSyncTargets(a.Ingress)
+}
+
+func (a *Ingress) TMCEnabed() bool {
+	return tmcEnabled(a.Ingress)
+}
+
 func (a *Ingress) GetKind() string {
 	return "Ingress"
 }
@@ -157,17 +165,17 @@ func (a *Ingress) getStatuses() (map[logicalcluster.Name]networkingv1.IngressSta
 
 func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificationList, _ CreateOrUpdateTraffic, _ DeleteTraffic) error {
 	generatedHost, ok := a.GetAnnotations()[ANNOTATION_HCG_HOST]
+	var unverifiedRules []networkingv1.IngressRule
+	var verifiedRules []networkingv1.IngressRule
 	if !ok || generatedHost == "" {
 		return ErrGeneratedHostMissing
 	}
-
-	var unverifiedRules []networkingv1.IngressRule
-	var verifiedRules []networkingv1.IngressRule
 
 	//find any rules in the spec that are for unverifiedHosts that are not verified
 	for _, rule := range a.Spec.Rules {
 		//ignore any rules for generated unverifiedHosts (these are recalculated later)
 		if rule.Host == generatedHost {
+			//	verifiedRules = append(verifiedRules, rule)
 			continue
 		}
 
@@ -184,48 +192,63 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 		generatedHostRule.Host = generatedHost
 		verifiedRules = append(verifiedRules, generatedHostRule)
 	}
+	fmt.Println("Verfified Rules", len(verifiedRules))
+	if len(unverifiedRules) > 0 {
+		metadata.AddLabel(a, LABEL_HAS_PENDING_HOSTS, "true")
+	} else {
+		metadata.RemoveLabel(a, LABEL_HAS_PENDING_HOSTS)
+	}
+	// nuke any pending hosts as these will be in the spec when tmc enabled
+	if a.TMCEnabed() {
+		delete(a.Annotations, ANNOTATION_PENDING_CUSTOM_HOSTS)
+	}
+	//This needs to be done before we check the pending
 	a.Spec.Rules = verifiedRules
+	if !a.TMCEnabed() {
+		//TODO remove below code when TMC is the default
 
-	pending := &Pending{}
-	var preservedPendingRules []networkingv1.IngressRule
+		pending := &Pending{}
+		var preservedPendingRules []networkingv1.IngressRule
 
-	//test all the rules in the pending rules annotation to see if they are verified now
-	pendingRulesRaw, exists := a.GetAnnotations()[ANNOTATION_PENDING_CUSTOM_HOSTS]
-	if exists {
-		if pendingRulesRaw != "" {
-			err := json.Unmarshal([]byte(pendingRulesRaw), pending)
+		//test all the rules in the pending rules annotation to see if they are verified now
+		pendingRulesRaw, exists := a.GetAnnotations()[ANNOTATION_PENDING_CUSTOM_HOSTS]
+		if exists {
+			if pendingRulesRaw != "" {
+				err := json.Unmarshal([]byte(pendingRulesRaw), pending)
+				if err != nil {
+					return err
+				}
+			}
+			for _, pendingRule := range pending.Rules {
+				//recalculate the generatedhost rule in the spec
+				generatedHostRule := *pendingRule.DeepCopy()
+				generatedHostRule.Host = generatedHost
+				a.Spec.Rules = append(a.Spec.Rules, generatedHostRule)
+
+				//check against domainverification status
+				if IsDomainVerified(pendingRule.Host, dvs.Items) || pendingRule.Host == "" {
+					//add the rule to the spec
+					a.Spec.Rules = append(a.Spec.Rules, pendingRule)
+				} else {
+					preservedPendingRules = append(preservedPendingRules, pendingRule)
+				}
+			}
+		}
+		//put the new unverified rules in the list of pending rules and update the annotation
+		pending.Rules = append(preservedPendingRules, unverifiedRules...)
+		if len(pending.Rules) > 0 {
+			metadata.AddLabel(a, LABEL_HAS_PENDING_HOSTS, "true")
+			newAnnotation, err := json.Marshal(pending)
 			if err != nil {
 				return err
 			}
+			metadata.AddAnnotation(a, ANNOTATION_PENDING_CUSTOM_HOSTS, string(newAnnotation))
+			return nil
 		}
-		for _, pendingRule := range pending.Rules {
-			//recalculate the generatedhost rule in the spec
-			generatedHostRule := *pendingRule.DeepCopy()
-			generatedHostRule.Host = generatedHost
-			a.Spec.Rules = append(a.Spec.Rules, generatedHostRule)
-
-			//check against domainverification status
-			if IsDomainVerified(pendingRule.Host, dvs.Items) || pendingRule.Host == "" {
-				//add the rule to the spec
-				a.Spec.Rules = append(a.Spec.Rules, pendingRule)
-			} else {
-				preservedPendingRules = append(preservedPendingRules, pendingRule)
-			}
-		}
-	}
-	//put the new unverified rules in the list of pending rules and update the annotation
-	pending.Rules = append(preservedPendingRules, unverifiedRules...)
-	if len(pending.Rules) > 0 {
-		metadata.AddLabel(a, LABEL_HAS_PENDING_HOSTS, "true")
-		newAnnotation, err := json.Marshal(pending)
-		if err != nil {
-			return err
-		}
-		metadata.AddAnnotation(a, ANNOTATION_PENDING_CUSTOM_HOSTS, string(newAnnotation))
+		metadata.RemoveLabel(a, LABEL_HAS_PENDING_HOSTS)
+		metadata.RemoveAnnotation(a, ANNOTATION_PENDING_CUSTOM_HOSTS)
 		return nil
 	}
-	metadata.RemoveLabel(a, LABEL_HAS_PENDING_HOSTS)
-	metadata.RemoveAnnotation(a, ANNOTATION_PENDING_CUSTOM_HOSTS)
 	return nil
 }
 

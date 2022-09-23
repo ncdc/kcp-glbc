@@ -2,8 +2,10 @@ package traffic
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
+	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	"github.com/kcp-dev/logicalcluster/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -11,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
 )
@@ -47,6 +50,27 @@ type Interface interface {
 	RemoveTLS(host []string)
 	ReplaceCustomHosts(managedHost string) []string
 	ProcessCustomHosts(context.Context, *v1.DomainVerificationList, CreateOrUpdateTraffic, DeleteTraffic) error
+	GetSyncTargets() []string
+	TMCEnabed() bool
+}
+
+func tmcEnabled(obj metav1.Object) bool {
+	has, _ := metadata.HasAnnotationsContaining(obj, workload.InternalClusterStatusAnnotationPrefix)
+	return has
+}
+
+func getSyncTargets(obj metav1.Object) []string {
+	_, labels := metadata.HasLabelsContaining(obj, workload.ClusterResourceStateLabelPrefix)
+	clusters := []string{}
+	for l := range labels {
+		labelParts := strings.Split(l, "/")
+		fmt.Println("lable parts ", labelParts)
+		if len(labelParts) < 2 {
+			continue
+		}
+		clusters = append(clusters, labelParts[1])
+	}
+	return clusters
 }
 
 type Pending struct {
