@@ -170,7 +170,6 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 	if !ok || generatedHost == "" {
 		return ErrGeneratedHostMissing
 	}
-
 	//find any rules in the spec that are for unverifiedHosts that are not verified
 	for _, rule := range a.Spec.Rules {
 		//ignore any rules for generated unverifiedHosts (these are recalculated later)
@@ -192,7 +191,6 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 		generatedHostRule.Host = generatedHost
 		verifiedRules = append(verifiedRules, generatedHostRule)
 	}
-	fmt.Println("Verfified Rules", len(verifiedRules))
 	if len(unverifiedRules) > 0 {
 		metadata.AddLabel(a, LABEL_HAS_PENDING_HOSTS, "true")
 	} else {
