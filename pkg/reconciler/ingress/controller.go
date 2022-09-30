@@ -23,7 +23,6 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 
-	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	"github.com/kcp-dev/logicalcluster/v2"
 
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
@@ -288,23 +287,35 @@ func (c *Controller) process(ctx context.Context, key string) error {
 		return nil
 	}
 
-	current := object.(*networkingv1.Ingress)
-	target := current.DeepCopy()
-	accessor := traffic.NewIngress(target)
-	err = c.reconcile(ctx, accessor)
+	currentState := object.(*networkingv1.Ingress)
+	targetState := currentState.DeepCopy()
+	targetStateReadWriter := traffic.NewIngress(targetState)
+	currentStateReader := traffic.NewIngress(currentState)
+	err = c.reconcile(ctx, targetStateReadWriter)
 	if err != nil {
 		return err
 	}
 	// our ingress object is now in the correct state, before we commit lets apply the changes via a transform
-	if err := c.transform(current, target); err != nil {
-		return err
-	}
-	if !equality.Semantic.DeepEqual(current, target) {
-		c.Logger.V(3).Info("attempting update of changed ingress ", "ingress key ", key)
-		_, err := c.KCPKubeClient.Cluster(logicalcluster.From(target)).NetworkingV1().Ingresses(target.Namespace).Update(ctx, target, metav1.UpdateOptions{})
+	if err := targetStateReadWriter.ApplyTransforms(currentStateReader); err != nil {
 		return err
 	}
 
+	if !equality.Semantic.DeepEqual(currentState, targetState) {
+		c.Logger.V(3).Info("attempting update of changed ingress ", "ingress key ", key)
+		_, err = c.KCPKubeClient.Cluster(logicalcluster.From(targetState)).NetworkingV1().Ingresses(targetState.Namespace).Update(ctx, targetState, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+	}
+	if targetStateReadWriter.TMCEnabed() {
+		if !equality.Semantic.DeepEqual(currentState.Status, targetState.Status) {
+			c.Logger.V(3).Info("attempting update of status for ingress ", "ingress key ", key)
+			targetState, err = c.KCPKubeClient.Cluster(logicalcluster.From(targetState)).NetworkingV1().Ingresses(targetState.Namespace).UpdateStatus(ctx, targetState, metav1.UpdateOptions{})
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 

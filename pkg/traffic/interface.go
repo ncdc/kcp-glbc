@@ -2,7 +2,6 @@ package traffic
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
@@ -34,7 +33,17 @@ const (
 	FINALIZER_CASCADE_CLEANUP           = "kuadrant.dev/cascade-cleanup"
 )
 
+<<<<<<< HEAD
 type dnsLookupFunc func(ctx context.Context, host string) ([]dns.HostAddress, error)
+=======
+type patch struct {
+	OP    string      `json:"op"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value"`
+}
+
+type dnsLookupFunc func(ctx context.Context, host string) ([]net.HostAddress, error)
+>>>>>>> 110e82b... wip transforms
 type CreateOrUpdateTraffic func(ctx context.Context, i Interface) error
 type DeleteTraffic func(ctx context.Context, i Interface) error
 
@@ -43,6 +52,10 @@ type Interface interface {
 	metav1.Object
 	GetKind() string
 	GetHosts() []string
+	SetDNSLBHost(string)
+	ApplyTransforms(previous Accessor) error
+	AddTLS(host, secret string)
+	RemoveTLS(host []string)
 	GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error)
 	GetLogicalCluster() logicalcluster.Name
 	GetNamespaceName() types.NamespacedName
@@ -51,6 +64,7 @@ type Interface interface {
 	ReplaceCustomHosts(managedHost string) []string
 	ProcessCustomHosts(context.Context, *v1.DomainVerificationList, CreateOrUpdateTraffic, DeleteTraffic) error
 	GetSyncTargets() []string
+	GetSpec() interface{}
 	TMCEnabed() bool
 }
 
@@ -64,7 +78,6 @@ func getSyncTargets(obj metav1.Object) []string {
 	clusters := []string{}
 	for l := range labels {
 		labelParts := strings.Split(l, "/")
-		fmt.Println("lable parts ", labelParts)
 		if len(labelParts) < 2 {
 			continue
 		}

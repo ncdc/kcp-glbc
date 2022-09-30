@@ -17,6 +17,7 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/_internal/slice"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func NewIngress(i *networkingv1.Ingress) *Ingress {
@@ -25,6 +26,17 @@ func NewIngress(i *networkingv1.Ingress) *Ingress {
 
 type Ingress struct {
 	*networkingv1.Ingress
+}
+
+func (a *Ingress) SetDNSLBHost(host string) {
+	a.Ingress.Status.LoadBalancer = corev1.LoadBalancerStatus{
+		Ingress: []corev1.LoadBalancerIngress{
+			{
+				Hostname: host,
+			},
+		},
+	}
+
 }
 
 func (a *Ingress) GetSyncTargets() []string {
@@ -139,7 +151,48 @@ func (a *Ingress) targetsFromStatus(ctx context.Context, status networkingv1.Ing
 	return targets, nil
 }
 
-func (a *Ingress) getStatuses() (map[logicalcluster.Name]networkingv1.IngressStatus, error) {
+func (a *IngressAccessor) GetSpec() interface{} {
+	return a.Spec
+}
+
+func (a *IngressAccessor) ApplyTransforms(old Accessor) error {
+	rulesPatch := patch{
+		OP:    "replace",
+		Path:  "/rules",
+		Value: a.Spec.Rules,
+	}
+	tlsPatch := patch{
+		OP:    "replace",
+		Path:  "/tls",
+		Value: a.Spec.TLS,
+	}
+	patches := []patch{rulesPatch, tlsPatch}
+	d, err := json.Marshal(patches)
+	if err != nil {
+		return fmt.Errorf("failed to marshal json patch %s", err)
+	}
+	// reset spec diffs
+	_, existingDiffs := metadata.HasAnnotationsContaining(a, workload.ClusterSpecDiffAnnotationPrefix)
+	for ek := range existingDiffs {
+		delete(a.Annotations, ek)
+	}
+	// and spec diff for any sync target
+	for _, c := range a.GetSyncTargets() {
+		a.Annotations[workload.ClusterSpecDiffAnnotationPrefix+c] = string(d)
+	}
+
+	// ensure we don't modify the actual spec (TODO TMC once transforms are default remove this check)
+	if a.TMCEnabed() {
+		oldSpec, ok := old.GetSpec().(networkingv1.IngressSpec)
+		if !ok {
+			return fmt.Errorf("expected the spec to be an ingress spec %v", old.GetSpec())
+		}
+		a.Spec = oldSpec
+	}
+	return nil
+}
+
+func (a *IngressAccessor) getStatuses() (map[logicalcluster.Name]networkingv1.IngressStatus, error) {
 	statuses := map[logicalcluster.Name]networkingv1.IngressStatus{}
 	for k, v := range a.Annotations {
 		status := networkingv1.IngressStatus{}
@@ -159,7 +212,9 @@ func (a *Ingress) getStatuses() (map[logicalcluster.Name]networkingv1.IngressSta
 	}
 
 	cluster := logicalcluster.From(a)
-	statuses[cluster] = a.Status
+	if _, ok := statuses[cluster]; !ok {
+		statuses[cluster] = a.Status
+	}
 	return statuses, nil
 }
 
@@ -202,8 +257,9 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 	}
 	//This needs to be done before we check the pending
 	a.Spec.Rules = verifiedRules
+
 	if !a.TMCEnabed() {
-		//TODO remove below code when TMC is the default
+		//TODO(TMC remove below code when TMC is the default)
 
 		pending := &Pending{}
 		var preservedPendingRules []networkingv1.IngressRule

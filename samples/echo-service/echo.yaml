@@ -39,7 +39,7 @@ metadata:
   name: echo
 spec:
   rules:
-    - host: whatever.com
+    - host: craigbrookes.com
       http: 
         paths:
           - path: /
