@@ -21,6 +21,7 @@ KCP_GLBC_DIR="${LOCAL_SETUP_DIR}/.."
 source "${LOCAL_SETUP_DIR}"/.setupEnv
 
 DO_BREW="false"
+: ${USE_CRC_CLUSTER:="false"}
 
 usage() { echo "usage: ./local-setup.sh -c <number of clusters> <-b>" 1>&2; exit 1; }
 while getopts ":bc:" arg; do
@@ -185,8 +186,12 @@ KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace create "kuadrant
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${SCRIPT_DIR}/deploy.sh -k "${KUSTOMIZATION_DIR}" -c "none"
 
 #3. Create GLBC sync target and wait for it to be ready
-createKINDCluster "${KIND_CLUSTER_PREFIX}1" 8081 8444
-kubectl apply -f ${GLBC_DEPLOYMENTS_DIR}/sync-targets/kcp-cluster-1-syncer.yaml
+if [[ "$USE_CRC_CLUSTER" == "true" ]]; then
+  CRC_CLUSTER_NAME=kcp-cluster-1 ${SCRIPT_DIR}/local-setup-add-crc-cluster.sh
+else
+  createKINDCluster "${KIND_CLUSTER_PREFIX}1" 8081 8444
+  kubectl apply -f ${GLBC_DEPLOYMENTS_DIR}/sync-targets/kcp-cluster-1-syncer.yaml
+fi
 
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workspace use "${GLBC_WORKSPACE}"
 

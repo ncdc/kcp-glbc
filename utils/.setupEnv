@@ -10,5 +10,6 @@ export KIND_BIN="${BIN_DIR}/kind"
 export KCP_BIN="${BIN_DIR}/kcp"
 : ${KUBECTL_KCP_BIN:=${BIN_DIR}/kubectl-kcp}
 export KUSTOMIZE_BIN="${BIN_DIR}/kustomize"
+export HELM_BIN="${BIN_DIR}/helm"
 
 export GOROOT KIND_BIN KCP_BIN KUBECTL_KCP_BIN KUSTOMIZE_BIN

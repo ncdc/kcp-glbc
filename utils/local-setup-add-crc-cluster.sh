@@ -45,7 +45,8 @@
 set -e pipefail
 
 TEMP_DIR="./tmp"
-CRC_CLUSTER_NAME=kcp-cluster-crc
+: ${CRC_CLUSTER_NAME:=kcp-cluster-crc}
+: ${SYNC_TARGETS_DIR:=config/deploy/sync-targets}
 CRC_KUBECONFIG="${CRC_CLUSTER_NAME}.kubeconfig"
 PULL_SECRET=~/pull-secret
 KUBECONFIG_KCP_ADMIN=.kcp/admin.kubeconfig
@@ -66,10 +67,16 @@ crc start -p $PULL_SECRET
 cp ~/.crc/machines/crc/kubeconfig ${TEMP_DIR}/${CRC_KUBECONFIG}
 cp ${TEMP_DIR}/${CRC_KUBECONFIG} ${TEMP_DIR}/${CRC_KUBECONFIG}.internal
 
+# Old syncers that might already exist on the crc vm can cause issues, so we make sure everything kcp related is removed.
+echo "Removing existing kcp resources"
+kubectl --context crc-admin get ns | grep kcp | awk '{print $1}' | xargs kubectl --context crc-admin delete ns
+
 echo "Registering crc cluster into KCP"
 KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ./bin/kubectl-kcp ws root:kuadrant
-KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workload sync ${CRC_CLUSTER_NAME} --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${TEMP_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
-kubectl --context crc-admin apply -f ${TEMP_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} ${KUBECTL_KCP_BIN} workload sync ${CRC_CLUSTER_NAME} --syncer-image=${KCP_SYNCER_IMAGE} --resources=ingresses.networking.k8s.io,services --output-file ${SYNC_TARGETS_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
+KUBECONFIG=${KUBECONFIG_KCP_ADMIN} kubectl annotate --overwrite synctarget ${CRC_CLUSTER_NAME} featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+
+kubectl --context crc-admin apply -f ${SYNC_TARGETS_DIR}/${CRC_CLUSTER_NAME}-syncer.yaml
 
 # TODO: Figure out the right order of cmds, kubeconfig, context & env vars to deploy the observability operator
 # Notes from installing manually on a managed openshift cluster:

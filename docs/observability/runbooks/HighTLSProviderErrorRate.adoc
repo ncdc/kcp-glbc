@@ -30,7 +30,12 @@ is greater than the threshold which is 1%. This usually means, the TLS certifica
 +
 [source,sh]
 ----
-kubectl get events -n kcp32653cc5662de9ab2054113507ac53e657ff4afc2a52926039fbc4cd
+kubectl get services -A --field-selector metadata.name=cert-manager
+----
++
+[source,sh]
+----
+kubectl get events -n <a namespace from the output above>
 ----
 . The following link shows how to https://cert-manager.io/docs/faq/troubleshooting/#troubleshooting-a-failed-certificate-request[Troubleshoot a Failed Certificate Request].
 You will find:

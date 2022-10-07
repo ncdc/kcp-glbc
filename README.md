@@ -50,9 +50,17 @@ To verify the resources were created successfully, check the output of the follo
 kubectl get deployment,service,ingress
 ```
 
-### Add CRC cluster (optional)
+### Using CRC sync target (optional)
 
-With a running local setup i.e. you have successfully executed `make local-setup`, you can run the following to create and add a CRC cluster:
+The default local setup uses a single sync target backed by a [kind](https://kind.sigs.k8s.io/) physical cluster, you can alternatively use a [crc](https://crc.dev/crc/) cluster by runnning:
+
+```bash
+make local-setup USE_CRC=true
+```
+
+### Add CRC sync target to existing local setup (optional)
+
+With a running local setup i.e. you have successfully executed `make local-setup`, you can run the following to create and add an additional sync target backed by a [crc](https://crc.dev/crc/) cluster:
 
 ```bash
 ./utils/local-setup-add-crc-cluster.sh
@@ -114,7 +122,15 @@ Run the performance tests:
 ```bash
 (export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs) && \
 export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig &&
-make performance TEST_DNSRECORD_COUNT=1 TEST_INGRESS_COUNT=1)
+make performance TEST_WORKSPACE_COUNT=1 TEST_DNSRECORD_COUNT=1 TEST_INGRESS_COUNT=1)
+```
+
+Run the smoke tests:
+
+```bash
+(export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs) && \
+export KUBECONFIG="$(pwd)"/.kcp/admin.kubeconfig &&
+make smoke)
 ```
 
 Alternatively, You can run the KCP GLBC and/or the tests from your IDE / debugger.

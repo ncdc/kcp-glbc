@@ -5,3 +5,11 @@ resources:
 
 patchesStrategicMerge:
   - cluster_role.yaml
+
+patchesJson6902:
+  - target:
+      group: "apps"
+      version: v1
+      kind: Deployment
+      name: kube-state-metrics
+    path: deployment.yaml

@@ -20,6 +20,7 @@ spec:
       labels:
         app.kubernetes.io/name: kcp-glbc
         app.kubernetes.io/component: controller-manager
+        glbc-name: glbc-local
     spec:
       securityContext:
         runAsNonRoot: true

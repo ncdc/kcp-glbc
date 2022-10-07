@@ -1,0 +1,53 @@
+// begin header
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+:numbered:
+:toc: macro
+:toc-title: pass:[<b>Table of Contents</b>]
+// end header
+= CertManagerDown
+
+toc::[]
+
+== Description
+
+The source of the alert is the `kube_pod_status_ready` metric. It fires when Cert-Manager is not running and failing to become ready, or is misconfigured, or the metrics endpoint is not responding.
+The alert will be triggered if cert-manager fails to become ready for longer than 5min.
+
+== Prerequisites
+
+* * Access to the physical cluster where GLBC should be running.
+
+== Execute/Resolution
+
+. Check the cert-manager component and namespace for indications of problems.
++
+[source,sh]
+----
+kubectl get services -A --field-selector metadata.name=cert-manager
+----
++
+[source,sh]
+----
+kubectl get events -n <a namespace from the output above>
+----
+
+. Check cert-manager logs for any errors.
++
+[source,sh]
+----
+kubectl get services -A --field-selector metadata.name=cert-manager
+----
++
+[source,sh]
+----
+kubectl logs deployment/cert-manager -n <a namespace from the output above>
+----
+
+== Validate
+. Check the alert is no longer firing.

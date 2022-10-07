@@ -1,2 +1,48 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cert-manager
 resources:
-  - cert-manager.yaml
+  - namespace.yaml
+helmCharts:
+  - name: cert-manager
+    repo: https://charts.jetstack.io
+    version: v1.7.1
+    releaseName: kcp-glbc
+    namespace: cert-manager
+    valuesInline:
+      global:
+        leaderElection:
+          namespace: cert-manager
+      # The Job API is not present
+      startupapicheck:
+        enabled: false
+      # The APIService API is not present
+      cainjector:
+        enabled: false
+      # It seems that webhooks in kcp only work when
+      # the url is external, not when the webhook is
+      # exposed through an internal Service.
+      # See https://github.com/kcp-dev/kcp/issues/143#issuecomment-1105443688
+      webhook:
+        replicaCount: 0
+      # Customize active controllers
+      extraArgs: ["--controllers=*,-ingress-shim"]
+
+patches:
+  # Disable the mutating and validating webhooks by
+  # removing the "rules" so the webhooks will never
+  # be triggered
+  - target:
+      kind: MutatingWebhookConfiguration
+      name: kcp-glbc-cert-manager-webhook
+    patch: |-
+      - op: replace
+        path: /webhooks/0/rules
+        value: []
+  - target:
+      kind: ValidatingWebhookConfiguration
+      name: kcp-glbc-cert-manager-webhook
+    patch: |-
+      - op: replace
+        path: /webhooks/0/rules
+        value: []

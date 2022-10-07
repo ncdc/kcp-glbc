@@ -5,11 +5,9 @@ metadata:
   name: glbc
 spec:
   permissionClaims:
-  - group: ""
-    resource: secrets
+  - resource: secrets
     state: "Accepted"
-  - group: ""
-    identityHash: DUMMY_HASH
+  - identityHash: DUMMY_HASH
     resource: services
     state: "Accepted"
   - group: apps

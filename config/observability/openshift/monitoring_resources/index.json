@@ -19,7 +19,8 @@
                 "podmonitor-kcp-glbc-controller-manager.yaml"
             ],
             "rules": [
-                "rules-glbc-prometheusrule.yaml"
+                "rules-glbc-prometheusrule.yaml",
+                "rules-hcg-prometheusrule.yaml"
             ],
             "remoteWrite": "remote-write.yaml",
             "federation": "federation-config.yaml"

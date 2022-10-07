@@ -29,7 +29,7 @@ func Process(obj metav1.Object, queue workqueue.RateLimitingInterface, logger lo
 	gracefulRemoveSoftFinalizers(obj, queue, logger)
 }
 
-//ensureSoftFinalizers ensure all active workload clusters have a soft finalizer set
+// ensureSoftFinalizers ensure all active workload clusters have a soft finalizer set
 func ensureSoftFinalizers(obj metav1.Object, logger logr.Logger) {
 	_, labels := metadata.HasLabelsContaining(obj, WorkloadTargetLabel)
 	for label := range labels {
@@ -49,7 +49,7 @@ func ensureSoftFinalizers(obj metav1.Object, logger logr.Logger) {
 	}
 }
 
-//gracefulRemoveSoftFinalizers any soft finalizers with no active workload cluster should trigger a delayed delete
+// gracefulRemoveSoftFinalizers any soft finalizers with no active workload cluster should trigger a delayed delete
 func gracefulRemoveSoftFinalizers(obj metav1.Object, queue workqueue.RateLimitingInterface, logger logr.Logger) {
 	at := time.Now()
 	at = at.Add((TTL * time.Second) * 2)

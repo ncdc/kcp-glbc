@@ -39,7 +39,7 @@ metadata:
   name: echo
 spec:
   rules:
-    - host:
+    - host: host.whatever.com
       http:
         paths:
           - path: /
@@ -49,8 +49,3 @@ spec:
                 name: echo
                 port:
                   number: 80
-  tls:
-  - hosts:
-      - host.whatever.com
-    secretName: testsecret-tls
-                    

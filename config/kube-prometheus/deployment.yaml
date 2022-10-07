@@ -1,0 +1,4 @@
+# Patches - Args added to kube-state-metric to allow the use of some missing labels.
+- op: add
+  path: "/spec/template/spec/containers/0/args/-"
+  value: --metric-labels-allowlist=pods=[*],deployments=[*]

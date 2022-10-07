@@ -130,3 +130,6 @@ prometheus-rules-unit-test:
 	docker run --rm -t \
     -v $(shell pwd)/$(DHALL_K8S_TARGET_DIR):/prometheus:z --entrypoint=/bin/sh \
 $(PROMTOOL_IMAGE) -c 'promtool test rules /prometheus/rules_unit_tests/*.yaml'
+	docker run --rm -t \
+    -v $(shell pwd)/$(DHALL_OPENSHIFT_TARGET_DIR):/prometheus:z --entrypoint=/bin/sh \
+$(PROMTOOL_IMAGE) -c 'promtool test rules /prometheus/rules_unit_tests/*.yaml'

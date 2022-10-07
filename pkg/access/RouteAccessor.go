@@ -10,7 +10,7 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/dns"
 )
 
-//RouteAccessor - placeholder, not yet implemented
+// RouteAccessor - placeholder, not yet implemented
 type RouteAccessor struct {
 	object *routev1.Route
 }

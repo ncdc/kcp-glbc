@@ -19,6 +19,15 @@ groups:
           name: DeadMansSwitchAlert
   - name: glbc
     rules:
+      - alert: CertManagerDown
+        annotations:
+          description: "Cert-Manager is down. Either Cert-Manager is not running and failing to become ready, is misconfigured, or the metrics endpoint is not responding."
+          runbook_url: https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/CertManagerDown.adoc
+          summary: Cert-Manager is down
+        expr: "(1-absent(kube_pod_status_ready{pod=~\"cert-manager.*\",condition=\"true\"})) or kube_pod_status_ready{pod=~\"cert-manager.*\",condition=\"true\"} < 1"
+        for: "5m"
+        labels:
+          severity: critical
       - alert: GLBCTargetDown
         annotations:
           description: "The GLBC Prometheus Target is down. Either the GLBC component is not running, is misconfigured, or the metrics endpoint is not responding."

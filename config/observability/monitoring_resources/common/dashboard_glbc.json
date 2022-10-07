@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": 4,
-  "iteration": 1663232648917,
+  "iteration": 1663771499928,
   "links": [],
   "panels": [
     {
@@ -53,6 +53,14 @@
               "to": "",
               "type": 1,
               "value": "kcp-unstable-redhat-hcg"
+            },
+            {
+              "from": "",
+              "id": 4,
+              "text": "GLBC local",
+              "to": "",
+              "type": 1,
+              "value": "glbc-local"
             }
           ],
           "thresholds": {
@@ -102,26 +110,13 @@
           "options": {}
         },
         {
-          "id": "organize",
+          "id": "filterFieldsByName",
           "options": {
-            "excludeByName": {
-              "Time": true,
-              "Value": true,
-              "container": true,
-              "endpoint": true,
-              "job": true,
-              "label_app_kubernetes_io_component": true,
-              "label_app_kubernetes_io_name": true,
-              "label_pod_template_hash": true,
-              "namespace": true,
-              "pod": true,
-              "prometheus": true,
-              "prometheus_replica": true,
-              "service": true,
-              "uid": true
-            },
-            "indexByName": {},
-            "renameByName": {}
+            "include": {
+              "names": [
+                "label_glbc_name"
+              ]
+            }
           }
         }
       ],
@@ -2273,5 +2268,5 @@
   "timezone": "browser",
   "title": "GLBC / Overview",
   "uid": "75f3d9c692690c6badc848e02a3d6e1b82444622",
-  "version": 5
+  "version": 6
 }

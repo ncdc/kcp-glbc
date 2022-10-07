@@ -1,0 +1,98 @@
+rule_files:
+  - ../rules-hcg.yaml
+
+evaluation_interval: 1m
+
+tests:
+#  Testing when one glbc instance is down
+  - interval: 1m
+    input_series:
+      - series: kube_pod_labels{label_glbc_name="kcp-stable-redhat-hcg", pod="kcp-glbc-controller-manager"}
+        values: "1+0x5 stale"
+      - series: kube_pod_labels{label_glbc_name="kcp-stable-redhat-hcg-unstable", pod="kcp-glbc-controller-manager"}
+        values: "1+0x20"
+      - series: kube_pod_labels{label_glbc_name="kcp-unstable-redhat-hcg", pod="kcp-glbc-controller-manager"}
+        values: "1+0x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: GLBCInstanceDown
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: GLBCInstanceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              label_glbc_name: kcp-stable-redhat-hcg
+            exp_annotations:
+              summary: 'One or more GLBC instances are down'
+              description: 'One or more GLBC instances are down: kcp-stable-redhat-hcg - Either the GLBC component is not running, is misconfigured, or the metrics endpoint is not responding.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/glbctargetdown.adoc'
+
+#  Testing when two glbc instances are down
+  - interval: 1m
+    input_series:
+      - series: kube_pod_labels{label_glbc_name="kcp-stable-redhat-hcg", pod="kcp-glbc-controller-manager"}
+        values: "1+0x5 stale"
+      - series: kube_pod_labels{label_glbc_name="kcp-stable-redhat-hcg-unstable", pod="kcp-glbc-controller-manager"}
+        values: "1+0x20"
+      - series: kube_pod_labels{label_glbc_name="kcp-unstable-redhat-hcg", pod="kcp-glbc-controller-manager"}
+        values: "1+0x5 stale"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: GLBCInstanceDown
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: GLBCInstanceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              label_glbc_name: kcp-stable-redhat-hcg
+            exp_annotations:
+              summary: 'One or more GLBC instances are down'
+              description: 'One or more GLBC instances are down: kcp-stable-redhat-hcg - Either the GLBC component is not running, is misconfigured, or the metrics endpoint is not responding.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/glbctargetdown.adoc'
+          - exp_labels:
+              severity: critical
+              label_glbc_name: kcp-unstable-redhat-hcg
+            exp_annotations:
+              summary: 'One or more GLBC instances are down'
+              description: 'One or more GLBC instances are down: kcp-unstable-redhat-hcg - Either the GLBC component is not running, is misconfigured, or the metrics endpoint is not responding.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/glbctargetdown.adoc'
+
+#  Testing when all glbc instances are down
+  - interval: 1m
+    input_series:
+      - series: kube_pod_labels{label_glbc_name="kcp-stable-redhat-hcg", pod="kcp-glbc-controller-manager"}
+        values: "1+0x5 stale"
+      - series: kube_pod_labels{label_glbc_name="kcp-stable-redhat-hcg-unstable", pod="kcp-glbc-controller-manager"}
+        values: "1+0x5 stale"
+      - series: kube_pod_labels{label_glbc_name="kcp-unstable-redhat-hcg", pod="kcp-glbc-controller-manager"}
+        values: "1+0x5 stale"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: GLBCInstanceDown
+        exp_alerts: [ ]
+      - eval_time: 20m
+        alertname: GLBCInstanceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              label_glbc_name: kcp-stable-redhat-hcg
+            exp_annotations:
+              summary: 'One or more GLBC instances are down'
+              description: 'One or more GLBC instances are down: kcp-stable-redhat-hcg - Either the GLBC component is not running, is misconfigured, or the metrics endpoint is not responding.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/glbctargetdown.adoc'
+          - exp_labels:
+              severity: critical
+              label_glbc_name: kcp-stable-redhat-hcg-unstable
+            exp_annotations:
+              summary: 'One or more GLBC instances are down'
+              description: 'One or more GLBC instances are down: kcp-stable-redhat-hcg-unstable - Either the GLBC component is not running, is misconfigured, or the metrics endpoint is not responding.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/glbctargetdown.adoc'
+          - exp_labels:
+              severity: critical
+              label_glbc_name: kcp-unstable-redhat-hcg
+            exp_annotations:
+              summary: 'One or more GLBC instances are down'
+              description: 'One or more GLBC instances are down: kcp-unstable-redhat-hcg - Either the GLBC component is not running, is misconfigured, or the metrics endpoint is not responding.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/glbctargetdown.adoc'

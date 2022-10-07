@@ -3,7 +3,6 @@ resources:
   - catalogsource.yaml
   - subscription.yaml
   - operatorgroup.yaml
-  - installplan.yaml
   - observability_secret.yaml
   - observability.yaml
 

@@ -1,5 +1,6 @@
 let rules =
-      [ ./GLBCTargetDown.dhall
+      [ ./CertManagerDown.dhall
+      , ./GLBCTargetDown.dhall
       , ./HighDNSLatencyAlert.dhall
       , ./HighDNSProviderErrorRate.dhall
       , ./HighTLSProviderErrorRate.dhall

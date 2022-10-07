@@ -17,9 +17,9 @@ The output resources differ slightly to allow working with the different monitor
 This generation also allows for variable template if you want different values for things like alert thresholds.
 There is another make target called `verify-gen-monitoring-resources`, which runs in the CI job to ensure the generated files are up to date.
 
-= Adding a new Alert rule
+== Adding a new Alert rule
 
-First, generate the alert rule scaffoling for the new alert rule:
+First, generate the alert rule scaffolding for the new alert rule:
 
 [source,bash]
 ----
@@ -31,7 +31,7 @@ In general, whenever you make a change to the source of the alert rule (e.g. `co
 you should regenerate the rules & PrometheusRule CR yaml with the `gen-monitoring-resources` target.
 Then re-run the `deploy-observability.sh` script to apply the rule changes to your local development cluster.
 The prometheus-operator will detect the changes to the PrometheusRule CR and apply them fairly quickly.
-You easiest way to check if you changes are applied is in the Alerts tab of the Prometheus UI.
+The easiest way to check if your changes are applied is in the Alerts tab of the Prometheus UI.
 
 If you prefer, you can modify the raw PrometheusRule CR and apply the changes to your cluster during development for a slightly quicker dev cycle turnaround.
 The Graph tab in the Prometheus UI is also very useful for testing & tweaking promql queries until you have the right expression.
@@ -44,4 +44,51 @@ Unit tests can be run with the `prometheus-rules-unit-test` target.
 All alerts must have a 'runbook' (or sometimes called a Standard Operating Procedure or SOP).
 A skeleton runbook will have been generated for you.
 This runbook is linked from an annotation on the alert rule.
-Add any relevant details, commands etc.. that will help troubleshoot & fix the alert cause when it fires.
+Add any relevant details, commands etc... that will help troubleshoot & fix the alert cause when it fires.
+
+
+== Adding a new panel in Grafana
+There are a few ways to add a new panel in Grafana. We could do this locally, or directly from your shared dashboard.
+
+=== From shared dashboard
+
+When creating a new panel in a shared dashboard in Grafana, it is best practice to first create a copy of the dashboard where
+we want to add the new panel. Within your shared dashboard, you can go into the dashboard settings by clicking on the cog
+icon at the top right of the screen.
+
+Then, click on the `Save As...` button on the left-hand side to save a copy of the dashboard.
+
+Afterwards, within this new dashboard you copied, you can create a new panel by clicking on the "add panel" icon.
+Then, you can continue with the <<Next steps>>.
+
+=== From local dashboard
+
+When creating a new panel from your local dashboard in Grafana, you will not necessarily need to create a copy of the dashboard.
+You can directly create a new panel in the dashboard by clicking on the "add panel" icon.
+Afterwards, you can continue with the <<Next steps>>.
+
+=== Next steps
+After making the desired changes to the panel, you can then apply and save them.
+
+To reflect these changes into the shared dashboard we wish to update, we will need to copy the JSON model from the dashboard
+where we added the new panel. We can do this by clicking on the share dashboard icon, we then select the `Export` tab, and from
+there we can view the JSON model and copy it.
+
+Then, we will update the https://github.com/Kuadrant/kcp-glbc/blob/main/config/observability/monitoring_resources/common/dashboard_glbc.json[dashboard_glbc.json] file with our new JSON model.
+Make sure that at the very bottom of the file, the title of the dashboard and the UID remains unmodified.
+
+We will then want to run in the terminal `make gen-monitoring-resources` to copy over these changes.
+Once this has been pushed and merged to the repository, the changes will be reflected in the shared dashboard in about an hour.
+
+== Adding a new Alert rule (to Openshift only)
+The easiest way to do this is to first copy the contents of an alert rule from this directory to use as a template: `config/observability/monitoring_resources/common/rules`.
+Then, we will create a new .dhall file for the new alert rule in this openshift directory: `config/observability/monitoring_resources/openshift` which is where you will
+paste the template. Now, you can make the desired changes to the alert rule.
+
+Afterwards, you will need to add this new alert rule to the rules in https://github.com/kcp-dev/kcp-glbc/blob/main/config/observability/monitoring_resources/openshift/rules-hcg.dhall[rules-hcg.dhall].
+Once added, we can then run in the terminal `make gen-monitoring-resources` to generate the rules & PrometheusRule CR yaml.
+
+All alerts must have unit tests and a runbook. We can create a yaml file for the unit tests under `config/observability/openshift/monitoring_resources/rules_unit_tests`, and
+a runbook under `docs/observability/runbooks`. We can use the same approach of copying the contents of other files as a template, and pasting it on our new files.
+
+

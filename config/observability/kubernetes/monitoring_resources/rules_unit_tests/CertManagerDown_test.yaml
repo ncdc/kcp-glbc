@@ -1,0 +1,48 @@
+rule_files:
+  - ../rules-glbc.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # 0m - 5m container is up
+      # 5m - 20m container is down
+      - series: kube_pod_status_ready{pod="cert-manager",condition="true"}
+        values: "1+0x5 0+0x15"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: CertManagerDown
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: CertManagerDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              pod: cert-manager
+              condition: true
+            exp_annotations:
+              summary: 'Cert-Manager is down'
+              description: 'Cert-Manager is down. Either Cert-Manager is not running and failing to become ready, is misconfigured, or the metrics endpoint is not responding.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/CertManagerDown.adoc'
+
+  - interval: 1m
+    input_series:
+      # 0m - 5m container is up
+      # 5m - 20m no time series exists
+      - series: kube_pod_status_ready{pod="cert-manager",condition="true"}
+        values: "1+0x5 stale"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: CertManagerDown
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: CertManagerDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              condition: true
+            exp_annotations:
+              summary: 'Cert-Manager is down'
+              description: 'Cert-Manager is down. Either Cert-Manager is not running and failing to become ready, is misconfigured, or the metrics endpoint is not responding.'
+              runbook_url: 'https://github.com/Kuadrant/kcp-glbc/blob/main/docs/observability/runbooks/CertManagerDown.adoc'

@@ -118,7 +118,7 @@ create_sync_target() {
 deploy_cert_manager() {
   echo "Deploying Cert Manager"
   create_ns "cert-manager"
-  ${KUSTOMIZE_BIN} build ${CERT_MANAGER_KUSTOMIZATION_DIR} | kubectl apply -f -
+  ${KUSTOMIZE_BIN} build ${CERT_MANAGER_KUSTOMIZATION_DIR} --enable-helm --helm-command ${HELM_BIN} | kubectl apply -f -
   echo "Waiting for Cert Manager deployments to be ready..."
   #When advancedscheduling is enabled the status check on deployments never works
   #kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all

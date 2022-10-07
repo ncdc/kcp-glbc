@@ -4,11 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       test_dnsrecord_count:
-        description: 'Number of DNSSRecord to create'
+        description: 'Number of DNSSRecords to create in each workspace'
         required: false
         default: '2'
       test_ingress_count:
-        description: 'Number of Ingresses to create'
+        description: 'Number of Ingresses to create in each workspace'
+        required: false
+        default: '2'
+      test_workspace_count:
+        description: 'Number of Workspaces to create'
         required: false
         default: '2'
 
@@ -20,6 +24,7 @@ jobs:
     env:
       TEST_DNSRECORD_COUNT: ${{ github.event.inputs.test_dnsrecord_count}}
       TEST_INGRESS_COUNT: ${{ github.event.inputs.test_ingress_count }}
+      TEST_WORKSPACE_COUNT: ${{ github.event.inputs.test_workspace_count}}
       AWS_DNS_PUBLIC_ZONE_ID: ${{ secrets.AWS_DNS_PUBLIC_ZONE_ID }}
       GLBC_DOMAIN: ${{ secrets.GLBC_DOMAIN }}
     steps:
@@ -40,10 +45,12 @@ jobs:
         env:
           TEST_DNSRECORD_COUNT: 1
           TEST_INGRESS_COUNT: 1
+          TEST_WORKSPACE_COUNT: 1
         run: |
           export KUBECONFIG=${{ env.KUBECONFIG }}
           echo "TEST_INGRESS_COUNT = ${{ env.TEST_INGRESS_COUNT }}"
           echo "TEST_DNSRECORD_COUNT = ${{ env.TEST_DNSRECORD_COUNT }}"
+          echo "TEST_WORKSPACE_COUNT = ${{ env.TEST_WORKSPACE_COUNT }}"
           echo "AWS_DNS_PUBLIC_ZONE_ID = ${{ env.AWS_DNS_PUBLIC_ZONE_ID }}"
           echo "GLBC_DOMAIN = ${{ env.GLBC_DOMAIN }}"
           make performance
@@ -52,6 +59,7 @@ jobs:
           export KUBECONFIG=${{ env.KUBECONFIG }}
           echo "TEST_INGRESS_COUNT = ${{ env.TEST_INGRESS_COUNT }}"
           echo "TEST_DNSRECORD_COUNT = ${{ env.TEST_DNSRECORD_COUNT }}"
+          echo "TEST_WORKSPACE_COUNT = ${{ env.TEST_WORKSPACE_COUNT }}"
           echo "AWS_DNS_PUBLIC_ZONE_ID = ${{ env.AWS_DNS_PUBLIC_ZONE_ID }}"
           echo "GLBC_DOMAIN = ${{ env.GLBC_DOMAIN }}"
           make performance

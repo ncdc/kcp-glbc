@@ -4,6 +4,7 @@ SHELL := /usr/bin/env bash
 # NUM_CLUSTERS is a total number of kind clusters to be provisioned
 NUM_CLUSTERS ?= 1
 DO_BREW := true
+USE_CRC := false
 KCP_BRANCH := release-0.8
 
 IMAGE_TAG_BASE ?= quay.io/kuadrant/kcp-glbc
@@ -68,27 +69,38 @@ lint: ## Run golangci-lint against code.
 test: generate ## Run tests.
 	go test -v ./... -coverprofile=cover.out
 
+##@ Test
+
 .PHONY: e2e
-e2e: build
+e2e: build ## Run e2e tests.
 	## Run the metrics test first, so it starts from a clean state
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
 	AWS_DNS_PUBLIC_ZONE_ID="${AWS_DNS_PUBLIC_ZONE_ID}" \
-	go test -count=1 -timeout 60m -v ./e2e/metrics -tags=e2e
+	go test -count=1 -timeout 60m -v ./test/e2e/metrics -tags=e2e
 	## Run the other tests
 	KUBECONFIG="$(KUBECONFIG)" CLUSTERS_KUBECONFIG_DIR="$(CLUSTERS_KUBECONFIG_DIR)" \
-	go test -count=1 -timeout 60m -v ./e2e -tags=e2e
+	go test -count=1 -timeout 60m -v ./test/e2e -tags=e2e
 
 TEST_DNSRECORD_COUNT ?= 2
 TEST_INGRESS_COUNT ?= 2
+TEST_WORKSPACE_COUNT ?= 2
 .PHONY: performance
-performance: build
+performance: TEST_TAGS ?=performance,ingress,dnsrecord
+performance: build ## Run performance tests.
 	@date +"Performance Test Start: %s%3N"
 	KUBECONFIG="$(KUBECONFIG)" \
 	AWS_DNS_PUBLIC_ZONE_ID="$(AWS_DNS_PUBLIC_ZONE_ID)" \
 	TEST_DNSRECORD_COUNT="$(TEST_DNSRECORD_COUNT)" \
 	TEST_INGRESS_COUNT="$(TEST_INGRESS_COUNT)" \
-	go test -count=1 -timeout 60m -v ./e2e/performance -tags=performance
+	TEST_WORKSPACE_COUNT="$(TEST_WORKSPACE_COUNT)" \
+	go test -count=1 -timeout 60m -v ./test/performance -tags=$(TEST_TAGS)
 	@date +"Performance Test End: %s%3N"
+
+.PHONY: smoke
+smoke: build ## Run smoke tests.
+	KUBECONFIG="$(KUBECONFIG)" \
+	AWS_DNS_PUBLIC_ZONE_ID="$(AWS_DNS_PUBLIC_ZONE_ID)" \
+	go test -count=1 -timeout 60m -v ./test/smoke -tags=smoke
 
 ##@ CI
 
@@ -119,13 +131,13 @@ uninstall: generate-crd kustomize ## Uninstall CRDs from the K8s cluster specifi
 	$(KUSTOMIZE) build config/crd | kubectl delete -f -
 
 .PHONY: deploy
-deploy: generate-crd kustomize generate-ld-config ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+deploy: generate-crd kustomize helm generate-ld-config ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/deploy/local/kcp-glbc | kubectl apply -f -
+	$(KUSTOMIZE) build config/deploy/local/kcp-glbc --enable-helm --helm-command $(HELM) | kubectl apply -f -
 
 .PHONY: undeploy
-undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/deploy/local/kcp-glbc | kubectl delete -f -
+undeploy: kustomize helm ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/deploy/local/kcp-glbc --enable-helm --helm-command $(HELM) | kubectl delete -f -
 
 ## Local Deployment
 LD_DIR=config/deploy/local/kcp-glbc
@@ -171,7 +183,8 @@ endif
 
 .PHONY: local-setup
 local-setup: export KCP_VERSION=${KCP_BRANCH}
-local-setup: clean kind kcp kustomize build ## Setup kcp locally using kind.
+local-setup: export USE_CRC_CLUSTER=${USE_CRC}
+local-setup: clean kind kcp kustomize helm build ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS} ${LOCAL_SETUP_FLAGS}
 
 ##@ Build Dependencies
@@ -186,11 +199,13 @@ KCP ?= $(LOCALBIN)/kcp
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 KIND ?= $(LOCALBIN)/kind
+HELM ?= $(LOCALBIN)/helm
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v4.5.4
 CONTROLLER_TOOLS_VERSION ?= v0.8.0
 KIND_VERSION ?= v0.14.0
+HELM_VERSION ?= v3.10.0
 
 .PHONY: kcp
 kcp: $(KCP) ## Download kcp locally if necessary.
@@ -216,6 +231,12 @@ KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/k
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE):
 	curl -s $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN)
+
+HELM_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3"
+.PHONY: helm
+helm: $(HELM)
+$(HELM):
+	curl -s $(HELM_INSTALL_SCRIPT) | HELM_INSTALL_DIR=$(LOCALBIN) PATH=$$PATH:$$HELM_INSTALL_DIR bash -s -- --no-sudo --version $(HELM_VERSION)
 
 # Generate metrics adoc content based on /metrics response from a running server
 .PHONY: gen-metrics-docs
