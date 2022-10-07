@@ -14,7 +14,7 @@ env:
 
 jobs:
   build:
-    if: github.repository_owner == 'kuadrant'
+    if: github.repository_owner == 'kcp-dev'
     name: Build and Publish KCP GLBC Image
     runs-on: ubuntu-20.04
     outputs:
@@ -63,24 +63,27 @@ jobs:
       - name: Print Image URL
         run: echo "Image pushed to ${{ steps.push-to-quay.outputs.registry-paths }}"
 
-  deploy:
-    if: "github.repository_owner == 'kuadrant' && github.ref_name == 'release-0.1'"
-    name: Deploy KCP GLBC Image
-    environment: stable
+  update-hcg-unstable:
+    if: "github.repository_owner == 'kcp-dev' && github.ref_name == 'main'"
+    name: Update HCG unstable
     runs-on: ubuntu-20.04
     needs: build
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up kubectl and kustomize
-        run: |-
-          mkdir -p bin/ && cd bin/
-          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.5.4/kustomize_v4.5.4_linux_amd64.tar.gz" | tar xzf -
-          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod u+x ./kubectl
-          chmod u+x ./kustomize
-      - name: Deploy image
-        id: deploy-image
-        run: |-
-          export PATH="${PATH}:$(pwd)/bin/"
-          echo "Controller Image: ${{ needs.build.outputs.controller_image }}"
-          kubectl --server=https://${{ secrets.CICD_KUBE_HOST }} --token=${{ secrets.CICD_KUBE_TOKEN }} -n ${{ secrets.CICD_KUBE_NS }} patch deployment kcp-glbc-controller-manager --patch '{"spec": {"template": {"spec": {"containers": [{"name": "manager","image": "${{ needs.build.outputs.controller_image }}"}]}}}}'
+      - uses: actions/checkout@v3
+        with:
+          repository: redhat-cps/glbc-deployments
+          ref: 'main'
+          ssh-key: ${{ secrets.ACTIONS_GITHUB_TOKEN }}
+      - name: Install kustomize
+        run: make kustomize
+      - name: Setup git config
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "<kuadrant.dev@redhat.com>"
+      - name: Update glbc image
+        run: |
+          cd kcp-stable/root:redhat-hcg:unstable/kcp-glbc && ../../../bin/kustomize edit set image quay.io/kuadrant/kcp-glbc=${{ needs.build.outputs.controller_image }}
+      - run: |
+          git add ./kcp-stable/root\:redhat-hcg\:unstable/kcp-glbc/kustomization.yaml
+          git commit -m "Update glbc image to ${{ needs.build.outputs.controller_image }}"
+          git push origin main
