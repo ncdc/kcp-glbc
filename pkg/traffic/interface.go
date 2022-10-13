@@ -27,7 +27,7 @@ const (
 	ANNOTATION_CERTIFICATE_STATE        = "kuadrant.dev/certificate-status"
 	ANNOTATION_HCG_HOST                 = "kuadrant.dev/host.generated"
 	ANNOTATION_HEALTH_CHECK_PREFIX      = "kuadrant.experimental/health-"
-	ANNOTATION_HCG_CUSTOM_HOST_REPLACED = "kuadrant.dev/custom-hosts.replaced"
+	ANNOTATION_HCG_CUSTOM_HOST_REPLACED = "kuadrant.dev/custom-hosts-status.removed"
 	ANNOTATION_PENDING_CUSTOM_HOSTS     = "kuadrant.dev/pendingCustomHosts"
 	LABEL_HAS_PENDING_HOSTS             = "kuadrant.dev/hasPendingCustomHosts"
 	FINALIZER_CASCADE_CLEANUP           = "kuadrant.dev/cascade-cleanup"

@@ -248,8 +248,14 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 	}
 	if len(unverifiedRules) > 0 {
 		metadata.AddLabel(a, LABEL_HAS_PENDING_HOSTS, "true")
+		replacedHosts := []string{}
+		for _, uh := range unverifiedRules {
+			replacedHosts = append(replacedHosts, uh.Host)
+		}
+		metadata.AddAnnotation(a, ANNOTATION_HCG_CUSTOM_HOST_REPLACED, fmt.Sprintf(" replaced custom hosts as they are not verfified %v", replacedHosts))
 	} else {
 		metadata.RemoveLabel(a, LABEL_HAS_PENDING_HOSTS)
+		metadata.RemoveAnnotation(a, ANNOTATION_HCG_CUSTOM_HOST_REPLACED)
 	}
 	// nuke any pending hosts as these will be in the spec when tmc enabled
 	if a.TMCEnabed() {

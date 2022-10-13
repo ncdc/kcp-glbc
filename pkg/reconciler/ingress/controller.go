@@ -295,12 +295,12 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
-	// our ingress object is now in the correct state, before we commit lets apply the changes via a transform
-	if err := targetStateReadWriter.ApplyTransforms(currentStateReader); err != nil {
-		return err
-	}
 
 	if !equality.Semantic.DeepEqual(currentState, targetState) {
+		// our ingress object is now in the correct state, before we commit lets apply any changes via a transform
+		if err := targetStateReadWriter.ApplyTransforms(currentStateReader); err != nil {
+			return err
+		}
 		c.Logger.V(3).Info("attempting update of changed ingress ", "ingress key ", key)
 		_, err = c.KCPKubeClient.Cluster(logicalcluster.From(targetState)).NetworkingV1().Ingresses(targetState.Namespace).Update(ctx, targetState, metav1.UpdateOptions{})
 		if err != nil {

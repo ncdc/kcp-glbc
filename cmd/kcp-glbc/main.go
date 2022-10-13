@@ -318,7 +318,7 @@ func main() {
 		})
 		exitOnError(err, "Failed to create Deployment controller")
 
-		// Secret controller should not have more than one instance and is only needed if using advanced scheduling
+		// Secret controller should not have more than one instance
 		if isControllerLeader {
 			secretController, err := secret.NewController(&secret.ControllerConfig{
 				ControllerConfig: &reconciler.ControllerConfig{
