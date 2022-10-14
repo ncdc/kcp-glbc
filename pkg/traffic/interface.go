@@ -2,6 +2,8 @@ package traffic
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
@@ -53,9 +55,7 @@ type Interface interface {
 	GetKind() string
 	GetHosts() []string
 	SetDNSLBHost(string)
-	ApplyTransforms(previous Accessor) error
-	AddTLS(host, secret string)
-	RemoveTLS(host []string)
+	ApplyTransforms(previous Interface) error
 	GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error)
 	GetLogicalCluster() logicalcluster.Name
 	GetNamespaceName() types.NamespacedName
@@ -106,4 +106,22 @@ func IsDomainVerified(host string, dvs []v1.DomainVerification) bool {
 
 	//recurse up the subdomains
 	return IsDomainVerified(parentHostParts[1], dvs)
+}
+
+func applyTransformPatches(patches []patch, object Interface) error {
+	d, err := json.Marshal(patches)
+	if err != nil {
+		return fmt.Errorf("failed to marshal json patch %s", err)
+	}
+	// reset spec diffs
+	_, existingDiffs := metadata.HasAnnotationsContaining(object, workload.ClusterSpecDiffAnnotationPrefix)
+	for ek := range existingDiffs {
+		metadata.RemoveAnnotation(object, ek)
+	}
+	// and spec diff for any sync target
+	for _, c := range object.GetSyncTargets() {
+		metadata.AddAnnotation(object, workload.ClusterSpecDiffAnnotationPrefix+c, string(d))
+	}
+
+	return nil
 }

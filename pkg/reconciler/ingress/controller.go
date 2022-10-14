@@ -3,7 +3,6 @@ package ingress
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -316,49 +315,6 @@ func (c *Controller) process(ctx context.Context, key string) error {
 			}
 		}
 	}
-	return nil
-}
-
-type patch struct {
-	OP    string      `json:"op"`
-	Path  string      `json:"path"`
-	Value interface{} `json:"value"`
-}
-
-func (c *Controller) transform(current, target *networkingv1.Ingress) error {
-	// apply spec to a json patch on the spec diff annotation
-	accessor := traffic.NewIngress()
-	rulesPatch := patch{
-		OP:    "replace",
-		Path:  "/rules",
-		Value: target.Spec.Rules,
-	}
-	tlsPatch := patch{
-		OP:    "replace",
-		Path:  "/tls",
-		Value: target.Spec.TLS,
-	}
-	patches := []patch{rulesPatch, tlsPatch}
-	d, err := json.Marshal(patches)
-	if err != nil {
-		return fmt.Errorf("failed to marshal json patch %s", err)
-	}
-	// reset spec diffs
-	_, existingDiffs := metadata.HasAnnotationsContaining(accessor, workload.ClusterSpecDiffAnnotationPrefix)
-	for ek := range existingDiffs {
-		delete(accessor.Annotations, ek)
-	}
-	// and spec diff for any sync target
-	for _, c := range accessor.GetSyncTargets() {
-		target.Annotations[workload.ClusterSpecDiffAnnotationPrefix+c] = string(d)
-	}
-
-	// ensure we don't modify the actual spec (TODO once transforms are default)
-	if accessor.TMCEnabed() {
-		c.Logger.Info("TMC: Advanced Scheduling in enabled for ingress ", accessor)
-		target.Spec = current.Spec
-	}
-
 	return nil
 }
 

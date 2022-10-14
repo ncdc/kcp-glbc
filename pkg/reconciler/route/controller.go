@@ -260,7 +260,6 @@ type ControllerConfig struct {
 	CertProvider                    tls.Provider
 	HostResolver                    dns.HostResolver
 	CustomHostsEnabled              bool
-	AdvancedSchedulingEnabled       bool
 	GLBCWorkspace                   logicalcluster.Name
 }
 

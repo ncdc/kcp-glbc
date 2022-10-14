@@ -41,6 +41,52 @@ func (a *Route) GetHosts() []string {
 	}
 }
 
+func (a *Route) GetSpec() interface{} {
+	return a.Spec
+}
+
+func (a *Route) TMCEnabed() bool {
+	return tmcEnabled(a)
+}
+
+func (a *Route) GetSyncTargets() []string {
+	return getSyncTargets(a)
+}
+
+func (a *Route) SetDNSLBHost(lbHost string) {
+	a.Status.Ingress = []routev1.RouteIngress{
+		{
+			Host: lbHost,
+		},
+	}
+}
+
+func (a *Route) ApplyTransforms(previous Interface) error {
+	hostPatch := patch{
+		OP:    "replace",
+		Path:  "/host",
+		Value: a.Spec.Host,
+	}
+	tlsPatch := patch{
+		OP:    "replace",
+		Path:  "/tls",
+		Value: a.Spec.TLS,
+	}
+	patches := []patch{hostPatch, tlsPatch}
+	if err := applyTransformPatches(patches, a); err != nil {
+		return err
+	}
+	// ensure we don't modify the actual spec (TODO TMC once transforms are default remove this check)
+	if a.TMCEnabed() {
+		oldSpec, ok := previous.GetSpec().(routev1.RouteSpec)
+		if !ok {
+			return fmt.Errorf("expected the spec to be an ingress spec %v", previous.GetSpec())
+		}
+		a.Spec = oldSpec
+	}
+	return nil
+}
+
 func (a *Route) AddTLS(host string, secret *corev1.Secret) {
 	if a.Route.Spec.TLS == nil {
 		a.Route.Spec.TLS = &routev1.TLSConfig{}

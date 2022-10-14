@@ -35,7 +35,7 @@ func (r *HostReconciler) Reconcile(ctx context.Context, accessor Interface) (Rec
 		// if this is not saved we end up with a new host and the certificate can have the wrong host
 		return ReconcileStatusStop, nil
 	}
-	hcgHost := accessor.GetAnnotations()[access.ANNOTATION_HCG_HOST]
+	hcgHost := accessor.GetAnnotations()[traffic.ANNOTATION_HCG_HOST]
 	//TODO this should only be set once everything is ready (DNS, and Certificate)
 	//https://github.com/kcp-dev/kcp-glbc/issues/399
 	accessor.SetDNSLBHost(hcgHost)

@@ -151,11 +151,11 @@ func (a *Ingress) targetsFromStatus(ctx context.Context, status networkingv1.Ing
 	return targets, nil
 }
 
-func (a *IngressAccessor) GetSpec() interface{} {
+func (a *Ingress) GetSpec() interface{} {
 	return a.Spec
 }
 
-func (a *IngressAccessor) ApplyTransforms(old Accessor) error {
+func (a *Ingress) ApplyTransforms(old Interface) error {
 	rulesPatch := patch{
 		OP:    "replace",
 		Path:  "/rules",
@@ -167,20 +167,9 @@ func (a *IngressAccessor) ApplyTransforms(old Accessor) error {
 		Value: a.Spec.TLS,
 	}
 	patches := []patch{rulesPatch, tlsPatch}
-	d, err := json.Marshal(patches)
-	if err != nil {
-		return fmt.Errorf("failed to marshal json patch %s", err)
+	if err := applyTransformPatches(patches, a); err != nil {
+		return err
 	}
-	// reset spec diffs
-	_, existingDiffs := metadata.HasAnnotationsContaining(a, workload.ClusterSpecDiffAnnotationPrefix)
-	for ek := range existingDiffs {
-		delete(a.Annotations, ek)
-	}
-	// and spec diff for any sync target
-	for _, c := range a.GetSyncTargets() {
-		a.Annotations[workload.ClusterSpecDiffAnnotationPrefix+c] = string(d)
-	}
-
 	// ensure we don't modify the actual spec (TODO TMC once transforms are default remove this check)
 	if a.TMCEnabed() {
 		oldSpec, ok := old.GetSpec().(networkingv1.IngressSpec)
@@ -190,9 +179,10 @@ func (a *IngressAccessor) ApplyTransforms(old Accessor) error {
 		a.Spec = oldSpec
 	}
 	return nil
+
 }
 
-func (a *IngressAccessor) getStatuses() (map[logicalcluster.Name]networkingv1.IngressStatus, error) {
+func (a *Ingress) getStatuses() (map[logicalcluster.Name]networkingv1.IngressStatus, error) {
 	statuses := map[logicalcluster.Name]networkingv1.IngressStatus{}
 	for k, v := range a.Annotations {
 		status := networkingv1.IngressStatus{}

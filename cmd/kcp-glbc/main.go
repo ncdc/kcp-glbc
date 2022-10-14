@@ -250,7 +250,6 @@ func main() {
 			CertProvider:                    certProvider,
 			HostResolver:                    dnsClient,
 			CustomHostsEnabled:              options.EnableCustomHosts,
-			AdvancedSchedulingEnabled:       options.AdvancedScheduling,
 			GLBCWorkspace:                   logicalcluster.New(options.GLBCWorkspace),
 		})
 
