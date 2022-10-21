@@ -19,6 +19,10 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
 )
 
+const (
+	InternalClusterMetaAnnotationPrefix = "experimental.meta.workload.kcp.dev/"
+)
+
 func NewIngress(i *networkingv1.Ingress) *Ingress {
 	return &Ingress{Ingress: i}
 }
@@ -99,7 +103,12 @@ func (a *Ingress) GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[
 
 	targets := map[logicalcluster.Name]map[string]dns.Target{}
 	for cluster, status := range statuses {
-		statusTargets, err := a.targetsFromStatus(ctx, status, dnsLookup)
+		targetMeta, err := a.getTargetMeta(cluster)
+		if err != nil {
+			return nil, err
+		}
+
+		statusTargets, err := a.targetsFromStatus(ctx, status, targetMeta, dnsLookup)
 		if err != nil {
 			return nil, err
 		}
@@ -109,18 +118,18 @@ func (a *Ingress) GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[
 	return targets, nil
 }
 
-func (a *Ingress) targetsFromStatus(ctx context.Context, status networkingv1.IngressStatus, dnsLookup dnsLookupFunc) (map[string]dns.Target, error) {
+func (a *Ingress) targetsFromStatus(ctx context.Context, status networkingv1.IngressStatus, targetMeta dns.TargetMeta, dnsLookup dnsLookupFunc) (map[string]dns.Target, error) {
 	targets := map[string]dns.Target{}
 	for _, lb := range status.LoadBalancer.Ingress {
 		if lb.IP != "" {
-			targets[lb.IP] = dns.Target{Value: []string{lb.IP}, TargetType: dns.TargetTypeIP}
+			targets[lb.IP] = dns.Target{Value: []string{lb.IP}, TargetType: dns.TargetTypeIP, TargetMeta: targetMeta}
 		}
 		if lb.Hostname != "" {
 			ips, err := dnsLookup(ctx, lb.Hostname)
 			if err != nil {
 				return nil, err
 			}
-			targets[lb.Hostname] = dns.Target{Value: []string{}, TargetType: dns.TargetTypeHost}
+			targets[lb.Hostname] = dns.Target{Value: []string{}, TargetType: dns.TargetTypeHost, TargetMeta: targetMeta}
 			for _, ip := range ips {
 				t := targets[lb.Hostname]
 				t.Value = append(targets[lb.Hostname].Value, ip.IP.String())
@@ -153,6 +162,29 @@ func (a *Ingress) getStatuses() (map[logicalcluster.Name]networkingv1.IngressSta
 	cluster := logicalcluster.From(a)
 	statuses[cluster] = a.Status
 	return statuses, nil
+}
+
+func (a *Ingress) getTargetMeta(cluster logicalcluster.Name) (dns.TargetMeta, error) {
+	targetMeta := dns.TargetMeta{}
+	for k, v := range a.Annotations {
+		if !strings.Contains(k, InternalClusterMetaAnnotationPrefix) {
+			continue
+		}
+		annotationParts := strings.Split(k, "/")
+		if len(annotationParts) < 2 {
+			continue
+		}
+		clusterName := annotationParts[1]
+		if clusterName != cluster.String() {
+			continue
+		}
+		err := json.Unmarshal([]byte(v), &targetMeta)
+		if err != nil {
+			return targetMeta, err
+		}
+		break
+	}
+	return targetMeta, nil
 }
 
 func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificationList, _ CreateOrUpdateTraffic, _ DeleteTraffic) error {

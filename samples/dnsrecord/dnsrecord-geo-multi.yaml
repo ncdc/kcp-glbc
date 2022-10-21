@@ -1,0 +1,83 @@
+apiVersion: kuadrant.dev/v1
+kind: DNSRecord
+metadata:
+  name: dnsrecord-geo-multi.mn.hcpapps.net
+spec:
+  endpoints:
+    - dnsName: dnsrecord-geo-multi.mn.hcpapps.net
+      recordTTL: 60
+      recordType: CNAME
+      setIdentifier: Default
+      providerSpecific:
+        - name: "aws/geolocation-country-code"
+          value: "*"
+      labels:
+        id: Default
+      targets:
+        - dnsrecord-geo-multi.na.mn.hcpapps.net
+    - dnsName: dnsrecord-geo-multi.mn.hcpapps.net
+      recordTTL: 60
+      recordType: CNAME
+      setIdentifier: NA
+      providerSpecific:
+        - name: "aws/geolocation-continent-code"
+          value: "NA"
+      labels:
+        id: NA
+      targets:
+        - dnsrecord-geo-multi.na.mn.hcpapps.net
+    - dnsName: dnsrecord-geo-multi.mn.hcpapps.net
+      recordTTL: 60
+      recordType: CNAME
+      setIdentifier: EU
+      providerSpecific:
+        - name: "aws/geolocation-continent-code"
+          value: "EU"
+      labels:
+        id: EU
+      targets:
+        - dnsrecord-geo-multi.eu.mn.hcpapps.net
+    - dnsName: dnsrecord-geo-multi.na.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      setIdentifier: 50.16.23.1
+      providerSpecific:
+        - name: "aws/weight"
+          value: "60"
+      labels:
+        id: 50.16.23.1
+      targets:
+        - 50.16.23.1
+    - dnsName: dnsrecord-geo-multi.na.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      setIdentifier: 50.16.23.2
+      providerSpecific:
+        - name: "aws/weight"
+          value: "60"
+      labels:
+        id: 50.16.23.2
+      targets:
+        - 50.16.23.2
+    - dnsName: dnsrecord-geo-multi.eu.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      setIdentifier: 52.30.101.221
+      providerSpecific:
+        - name: "aws/weight"
+          value: "60"
+      labels:
+        id: 52.30.101.221
+      targets:
+        - 52.30.101.221
+    - dnsName: dnsrecord-geo-multi.eu.mn.hcpapps.net
+      recordTTL: 60
+      recordType: A
+      setIdentifier: 52.215.108.61
+      providerSpecific:
+        - name: "aws/weight"
+          value: "60"
+      labels:
+        id: 52.215.108.61
+      targets:
+        - 52.215.108.61

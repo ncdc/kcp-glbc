@@ -1,0 +1,46 @@
+---
+apiVersion: scheduling.kcp.dev/v1alpha1
+kind: Placement
+metadata:
+  name: north-america
+spec:
+  locationSelectors:
+    - matchLabels:
+        kuadrant.dev/location: north-america
+  locationResource:
+    group: workload.kcp.dev
+    resource: synctargets
+    version: v1alpha1
+  namespaceSelector: {}
+  locationWorkspace: root:kuadrant
+---
+apiVersion: scheduling.kcp.dev/v1alpha1
+kind: Placement
+metadata:
+  name: europe
+spec:
+  locationSelectors:
+    - matchLabels:
+        kuadrant.dev/location: europe
+  locationResource:
+    group: workload.kcp.dev
+    resource: synctargets
+    version: v1alpha1
+  namespaceSelector: {}
+  locationWorkspace: root:kuadrant
+---
+apiVersion: scheduling.kcp.dev/v1alpha1
+kind: Placement
+metadata:
+  name: asia
+spec:
+  locationSelectors:
+    - matchLabels:
+        kuadrant.dev/location: asia
+  locationResource:
+    group: workload.kcp.dev
+    resource: synctargets
+    version: v1alpha1
+  namespaceSelector: {}
+  locationWorkspace: root:kuadrant
+

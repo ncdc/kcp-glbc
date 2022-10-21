@@ -1,0 +1,38 @@
+{
+  "ip": "52.30.101.221",
+  "success": true,
+  "type": "IPv4",
+  "continent": "Europe",
+  "continent_code": "EU",
+  "country": "Ireland",
+  "country_code": "IE",
+  "region": "Leinster",
+  "region_code": "L",
+  "city": "Dublin",
+  "latitude": 53.3165322,
+  "longitude": -6.3425318,
+  "is_eu": true,
+  "postal": "D01 P5P5",
+  "calling_code": "353",
+  "capital": "Dublin",
+  "borders": "GB",
+  "flag": {
+    "img": "https:\/\/cdn.ipwhois.io\/flags\/ie.svg",
+    "emoji": "\ud83c\uddee\ud83c\uddea",
+    "emoji_unicode": "U+1F1EE U+1F1EA"
+  },
+  "connection": {
+    "asn": 16509,
+    "org": "Amazon Data Services Ireland Limited",
+    "isp": "Amazon.com, Inc.",
+    "domain": "amazon.com"
+  },
+  "timezone": {
+    "id": "Europe\/Dublin",
+    "abbr": "IST",
+    "is_dst": false,
+    "offset": 3600,
+    "utc": "+01:00",
+    "current_time": "2022-10-24T10:55:30+01:00"
+  }
+}

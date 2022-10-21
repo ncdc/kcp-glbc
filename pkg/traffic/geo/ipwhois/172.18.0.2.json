@@ -1,0 +1,38 @@
+{
+  "ip": "172.18.0.2",
+  "success": true,
+  "type": "IPv4",
+  "continent": "North America",
+  "continent_code": "NA",
+  "country": "United States",
+  "country_code": "US",
+  "region": "Virginia",
+  "region_code": "VA",
+  "city": "Ashburn",
+  "latitude": 39.0437567,
+  "longitude": -77.4874416,
+  "is_eu": false,
+  "postal": "20147",
+  "calling_code": "1",
+  "capital": "Washington D.C.",
+  "borders": "CA,MX",
+  "flag": {
+    "img": "https:\/\/cdn.ipwhois.io\/flags\/us.svg",
+    "emoji": "\ud83c\uddfa\ud83c\uddf8",
+    "emoji_unicode": "U+1F1FA U+1F1F8"
+  },
+  "connection": {
+    "asn": 14618,
+    "org": "Amazon Data Services NoVa",
+    "isp": "Amazon.com, Inc.",
+    "domain": "amazon.com"
+  },
+  "timezone": {
+    "id": "America\/New_York",
+    "abbr": "EDT",
+    "is_dst": true,
+    "offset": -14400,
+    "utc": "-04:00",
+    "current_time": "2022-10-24T05:58:21-04:00"
+  }
+}

@@ -2,6 +2,7 @@ package traffic
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
 	"github.com/kuadrant/kcp-glbc/pkg/dns/aws"
+	"github.com/kuadrant/kcp-glbc/pkg/traffic/geo/ipwhois"
 )
 
 type DnsReconciler struct {
@@ -55,6 +57,7 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 	var activeLBHosts []string
 	activeDNSTargetIPs := map[string][]string{}
 	deletingTargetIPs := map[string][]string{}
+	activeDNSTargets := map[string]dns.Target{}
 
 	targets, err := accessor.GetTargets(ctx, r.DNSLookup)
 	if err != nil {
@@ -77,6 +80,7 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 				activeLBHosts = append(activeLBHosts, host)
 			}
 			activeDNSTargetIPs[host] = append(activeDNSTargetIPs[host], target.Value...)
+			activeDNSTargets[host] = target
 		}
 	}
 
@@ -103,7 +107,7 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 		if err != nil {
 			return ReconcileStatusContinue, err
 		}
-		r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, record)
+		r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, activeDNSTargets, record)
 		// Create the resource in the cluster
 		if len(record.Spec.Endpoints) > 0 {
 			r.Log.V(3).Info("creating DNSRecord ", "record", record.Name, "endpoints for DNSRecord", record.Spec.Endpoints)
@@ -118,7 +122,7 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 	}
 	// If it does exist, update it
 	copyDNS := existing.DeepCopy()
-	r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, copyDNS)
+	r.setEndpointFromTargets(managedHost, activeDNSTargetIPs, activeDNSTargets, copyDNS)
 	objMeta, err := meta.Accessor(accessor)
 	if err != nil {
 		return ReconcileStatusContinue, err
@@ -182,41 +186,122 @@ func copyHealthAnnotations(dnsRecord *v1.DNSRecord, objectMeta metav1.Object) {
 	}))
 }
 
-func (r *DnsReconciler) setEndpointFromTargets(dnsName string, dnsTargets map[string][]string, dnsRecord *v1.DNSRecord) {
+func (r *DnsReconciler) setEndpointFromTargets(dnsName string, dnsTargets map[string][]string, activeDNSTargets map[string]dns.Target, dnsRecord *v1.DNSRecord) {
 	currentEndpoints := make(map[string]*v1.Endpoint, len(dnsRecord.Spec.Endpoints))
-	for _, endpoint := range dnsRecord.Spec.Endpoints {
-		address, ok := endpoint.GetAddress()
-		if !ok {
-			continue
+
+	//dnsTargets = "host/ip -> array of ips"
+	r.Log.V(3).Info("setEndpointFromTargets", "dnsName", dnsName, "dnsTargets", dnsTargets)
+
+	//geoDnsTargets = "continent code -> host/ip -> array of ips"
+	geoDnsTargets := map[string]map[string][]string{}
+	for host, targets := range dnsTargets {
+
+		r.Log.V(3).Info("setEndpointFromTargets", "activeDNSTargets[host].TargetMeta.Geo", activeDNSTargets[host].TargetMeta.Geo)
+
+		targetContinentCode := activeDNSTargets[host].TargetMeta.Geo.ContinentCode
+		if targetContinentCode == "" {
+			targetContinentCode = awsGeoContinentCode(targets[0])
+			r.Log.V(3).Info("setEndpointFromTargets, using ip lookup", "targetContinentCode", targetContinentCode)
+		} else {
+			r.Log.V(3).Info("setEndpointFromTargets, using annotation", "targetContinentCode", targetContinentCode)
 		}
-		currentEndpoints[address] = endpoint
+
+		if geoDnsTargets[targetContinentCode] == nil {
+			geoDnsTargets[targetContinentCode] = map[string][]string{}
+		}
+		geoDnsTargets[targetContinentCode][host] = targets
+	}
+
+	continentCodes := make([]string, 0, len(geoDnsTargets))
+	for k := range geoDnsTargets {
+		continentCodes = append(continentCodes, k)
+	}
+	sort.Strings(continentCodes)
+
+	r.Log.V(3).Info("setEndpointFromTargets", "geoDnsTargets", geoDnsTargets, "continentCodes", continentCodes)
+
+	for _, endpoint := range dnsRecord.Spec.Endpoints {
+		currentEndpoints[endpoint.SetID()] = endpoint
 	}
 	var (
 		newEndpoints []*v1.Endpoint
 		endpoint     *v1.Endpoint
 	)
 	ok := false
-	for _, targets := range dnsTargets {
-		for _, target := range targets {
-			// If the endpoint for this target does not exist, add a new one
-			if endpoint, ok = currentEndpoints[target]; !ok {
+	for continentCode, hosts := range geoDnsTargets {
+		r.Log.V(3).Info("setEndpointFromTargets", "hosts", hosts, "continentCode", continentCode)
+
+		p := strings.Split(dnsName, ".")
+		first := p[0]
+		copy(p, p[1:])
+		p = p[:len(p) - 1]
+		dnsNameContinent := fmt.Sprintf("%s.%s.%s", first, strings.ToLower(continentCode), strings.Join(p, "."))
+
+		r.Log.V(3).Info("setEndpointFromTargets", "dnsNameContinent", dnsNameContinent)
+
+		if endpoint, ok = currentEndpoints[dnsNameContinent]; !ok {
+			endpoint = &v1.Endpoint{
+				SetIdentifier: dnsNameContinent,
+			}
+		}
+		endpoint.DNSName = dnsName
+		endpoint.RecordType = "CNAME"
+		endpoint.Targets = []string{dnsNameContinent}
+		endpoint.RecordTTL = 60
+		endpoint.SetProviderSpecific(aws.ProviderSpecificGeolocationContinentCode, continentCode)
+		newEndpoints = append(newEndpoints, endpoint)
+
+		if continentCode == continentCodes[0] {
+			if endpoint, ok = currentEndpoints["default"]; !ok {
 				endpoint = &v1.Endpoint{
-					SetIdentifier: target,
+					SetIdentifier: "default",
 				}
 			}
-			// Update the endpoint fields
 			endpoint.DNSName = dnsName
-			endpoint.RecordType = "A"
-			endpoint.Targets = []string{target}
+			endpoint.RecordType = "CNAME"
+			endpoint.Targets = []string{dnsNameContinent}
 			endpoint.RecordTTL = 60
-			endpoint.SetProviderSpecific(aws.ProviderSpecificWeight, awsEndpointWeight(len(targets)))
+			endpoint.SetProviderSpecific(aws.ProviderSpecificGeolocationCountryCode, "*")
 			newEndpoints = append(newEndpoints, endpoint)
+		}
+
+		for _, targets := range hosts {
+			for _, target := range targets {
+				//We need a geo specific set id
+				targetID := fmt.Sprintf("%s.%s", strings.ToLower(continentCode), target)
+				// If the endpoint for this target does not exist, add a new one
+				if endpoint, ok = currentEndpoints[targetID]; !ok {
+					endpoint = &v1.Endpoint{
+						SetIdentifier: targetID,
+					}
+				}
+
+				weight:= awsEndpointWeight(len(hosts))
+
+				r.Log.V(3).Info("setEndpointFromTargets creating A record", "target", target, "dnsNameContinent", dnsNameContinent, "weight", weight)
+
+				// Update the endpoint fields
+				endpoint.DNSName = dnsNameContinent
+				endpoint.RecordType = "A"
+				endpoint.Targets = []string{target}
+				endpoint.RecordTTL = 60
+				providerSpecific := v1.ProviderSpecific{
+					{
+						Name:  aws.ProviderSpecificWeight,
+						Value: weight,
+					},
+				}
+				endpoint.ProviderSpecific = providerSpecific
+				newEndpoints = append(newEndpoints, endpoint)
+			}
 		}
 	}
 
 	sort.Slice(newEndpoints, func(i, j int) bool {
 		return newEndpoints[i].Targets[0] < newEndpoints[j].Targets[0]
 	})
+
+	r.Log.V(3).Info("setEndpointFromTargets", "newEndpoints", newEndpoints)
 
 	dnsRecord.Spec.Endpoints = newEndpoints
 }
@@ -236,6 +321,10 @@ func awsEndpointWeight(numIPs int) string {
 		numIPs = maxWeight
 	}
 	return strconv.Itoa(maxWeight / numIPs)
+}
+// awsGeoContinentCode returns a continent code for the given IP
+func awsGeoContinentCode(ip string) string {
+	return ipwhois.GetContinentCodeForIp(ip)
 }
 
 func objectKey(obj runtime.Object) cache.ExplicitKey {

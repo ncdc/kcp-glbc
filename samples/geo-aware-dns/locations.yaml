@@ -1,0 +1,45 @@
+---
+apiVersion: scheduling.kcp.dev/v1alpha1
+kind: Location
+metadata:
+  name: north-america
+  labels:
+    kuadrant.dev/location: north-america
+spec:
+  instanceSelector:
+    matchLabels:
+      kuadrant.dev/synctarget: kcp-cluster-1
+  resource:
+    group: workload.kcp.dev
+    resource: synctargets
+    version: v1alpha1
+---
+apiVersion: scheduling.kcp.dev/v1alpha1
+kind: Location
+metadata:
+  name: europe
+  labels:
+    kuadrant.dev/location: europe
+spec:
+  instanceSelector:
+    matchLabels:
+      kuadrant.dev/synctarget: kcp-cluster-2
+  resource:
+    group: workload.kcp.dev
+    resource: synctargets
+    version: v1alpha1
+---
+apiVersion: scheduling.kcp.dev/v1alpha1
+kind: Location
+metadata:
+  name: asia
+  labels:
+    kuadrant.dev/location: asia
+spec:
+  instanceSelector:
+    matchLabels:
+      kuadrant.dev/synctarget: kcp-cluster-3
+  resource:
+    group: workload.kcp.dev
+    resource: synctargets
+    version: v1alpha1
