@@ -196,7 +196,9 @@ func TestApplyTransforms(t *testing.T) {
 					if err != nil {
 						return fmt.Errorf("failed to marshal rules %s", err)
 					}
-					json.Unmarshal(b, &rules)
+					if err := json.Unmarshal(b, &rules); err != nil {
+						return err
+					}
 					if !equality.Semantic.DeepEqual(rules, expectedTransform.Rules) {
 						return fmt.Errorf("expected the rules in the transform to match the rules in transformed ingress")
 					}
@@ -208,7 +210,9 @@ func TestApplyTransforms(t *testing.T) {
 					if err != nil {
 						return fmt.Errorf("failed to marshal rules %s", err)
 					}
-					json.Unmarshal(b, &tls)
+					if err := json.Unmarshal(b, &tls); err != nil {
+						return err
+					}
 					if !equality.Semantic.DeepEqual(tls, expectedTransform.TLS) {
 						return fmt.Errorf("expected the tls section in the transform to match the tls in transformed ingress")
 					}
@@ -251,9 +255,5 @@ func TestApplyTransforms(t *testing.T) {
 			}
 		})
 	}
-
-}
-
-func TestGetDNSTargets(t *testing.T) {
 
 }

@@ -144,7 +144,6 @@ func (a *Ingress) GetSpec() interface{} {
 func (a *Ingress) Transform(old Interface) error {
 	oldIngress := old.(*Ingress)
 	patches := []patch{}
-	fmt.Println("pre transform ", a.Spec.Rules, a.Spec.TLS)
 	if !equality.Semantic.DeepEqual(a.Spec.Rules, oldIngress.Spec.Rules) {
 		rulesPatch := patch{
 			OP:    "replace",

@@ -306,7 +306,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 	if targetStateReadWriter.TMCEnabed() {
 		if !equality.Semantic.DeepEqual(currentState.Status, targetState.Status) {
 			c.Logger.V(3).Info("attempting update of status for ingress ", "ingress key ", key)
-			targetState, err = c.KCPKubeClient.Cluster(logicalcluster.From(targetState)).NetworkingV1().Ingresses(targetState.Namespace).UpdateStatus(ctx, targetState, metav1.UpdateOptions{})
+			_, err = c.KCPKubeClient.Cluster(logicalcluster.From(targetState)).NetworkingV1().Ingresses(targetState.Namespace).UpdateStatus(ctx, targetState, metav1.UpdateOptions{})
 			if err != nil {
 				return err
 			}

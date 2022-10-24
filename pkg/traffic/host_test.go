@@ -116,6 +116,9 @@ func TestReconcileHost(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			reconciler := &HostReconciler{
 				ManagedDomain: managedDomain,
+				GetDomainVerifications: func(ctx context.Context, accessor Interface) (*v1.DomainVerificationList, error) {
+					return &v1.DomainVerificationList{}, nil
+				},
 			}
 
 			if err := tc.Validate(buildResult(reconciler, tc.Accessor())); err != nil {
