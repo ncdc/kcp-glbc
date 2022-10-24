@@ -28,7 +28,6 @@ import (
 
 	"github.com/kcp-dev/logicalcluster/v2"
 
-	"github.com/kuadrant/kcp-glbc/pkg/_internal/env"
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	. "github.com/kuadrant/kcp-glbc/test/support"
@@ -107,7 +106,6 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 	ingresses := GetIngresses(t, namespace, "")
 	t.Expect(ingresses).Should(HaveLen(ingressCount))
 
-	customHostsEnabled := env.GetEnvBool("GLBC_ENABLE_CUSTOM_HOSTS", false)
 	// Assert Ingresses reconcile success
 	for _, ingress := range ingresses {
 		tlsSecretName := fmt.Sprintf("hcg-tls-ingress-%s", ingress.Name)
@@ -120,16 +118,15 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 			Satisfy(HasTLSSecretForGeneratedHost(tlsSecretName)),
 		))
 
-		if customHostsEnabled {
-			t.Eventually(Ingress(t, namespace, ingress.Name)).WithTimeout(TestTimeoutMedium).Should(And(
-				WithTransform(Annotations, And(
-					HaveKey(traffic.ANNOTATION_PENDING_CUSTOM_HOSTS),
-				)),
-				WithTransform(Labels, And(
-					HaveKey(traffic.LABEL_HAS_PENDING_HOSTS),
-				)),
-			))
-		}
+		t.Eventually(Ingress(t, namespace, ingress.Name)).WithTimeout(TestTimeoutMedium).Should(And(
+			WithTransform(Annotations, And(
+				HaveKey(traffic.ANNOTATION_PENDING_CUSTOM_HOSTS),
+			)),
+			WithTransform(Labels, And(
+				HaveKey(traffic.LABEL_HAS_PENDING_HOSTS),
+			)),
+		))
+
 	}
 
 	// Retrieve DNSRecords

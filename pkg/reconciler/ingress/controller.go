@@ -63,7 +63,6 @@ func NewController(config *ControllerConfig) *Controller {
 		domain:                  config.Domain,
 		hostResolver:            hostResolver,
 		hostsWatcher:            dns.NewHostsWatcher(&base.Logger, hostResolver, dns.DefaultInterval),
-		customHostsEnabled:      config.CustomHostsEnabled,
 		certInformerFactory:     config.CertificateInformer,
 		KuadrantInformerFactory: config.KuadrantInformer,
 	}
@@ -236,7 +235,6 @@ type ControllerConfig struct {
 	Domain                   string
 	CertProvider             tls.Provider
 	HostResolver             dns.HostResolver
-	CustomHostsEnabled       bool
 	GLBCWorkspace            logicalcluster.Name
 }
 
@@ -253,7 +251,6 @@ type Controller struct {
 	domain                  string
 	hostResolver            dns.HostResolver
 	hostsWatcher            *dns.HostsWatcher
-	customHostsEnabled      bool
 	certInformerFactory     certmaninformer.SharedInformerFactory
 	glbcInformerFactory     informers.SharedInformerFactory
 	KuadrantInformerFactory kuadrantInformer.SharedInformerFactory
@@ -297,7 +294,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 
 	if !equality.Semantic.DeepEqual(currentState, targetState) {
 		// our ingress object is now in the correct state, before we commit lets apply any changes via a transform
-		if err := targetStateReadWriter.ApplyTransforms(currentStateReader); err != nil {
+		if err := targetStateReadWriter.Transform(currentStateReader); err != nil {
 			return err
 		}
 		c.Logger.V(3).Info("attempting update of changed ingress ", "ingress key ", key)

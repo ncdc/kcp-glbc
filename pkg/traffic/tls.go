@@ -222,13 +222,10 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, accessor Interfac
 			return ReconcileStatusStop, err
 		}
 	}
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return ReconcileStatusStop, err
-	}
-
 	// set tls setting on the accessor
 	certSecret, err := r.GetSecret(ctx, tlsSecretName, accessor.GetNamespace(), accessor.GetLogicalCluster())
 	if err != nil {
+		// don't proceed until the secret is present. We want TLS to be available before we make the ingress accessible via DNS
 		return ReconcileStatusStop, err
 	}
 	accessor.AddTLS(certReq.Host, certSecret)

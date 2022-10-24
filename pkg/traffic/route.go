@@ -61,7 +61,7 @@ func (a *Route) SetDNSLBHost(lbHost string) {
 	}
 }
 
-func (a *Route) ApplyTransforms(previous Interface) error {
+func (a *Route) Transform(previous Interface) error {
 	hostPatch := patch{
 		OP:    "replace",
 		Path:  "/host",
@@ -101,25 +101,14 @@ func (a *Route) AddTLS(host string, secret *corev1.Secret) {
 func (a *Route) RemoveTLS(hosts []string) {
 	//check the passed in hosts contains the host this is ingress is for
 	for _, host := range hosts {
-		if a.Route.Spec.Host == host {
+		if a.Route.Spec.Host != host {
 			//and if so, remove it
 			a.Route.Spec.TLS = &routev1.TLSConfig{}
 		}
 	}
 }
 
-func (a *Route) ReplaceCustomHosts(managedHost string) []string {
-	if a.Route.Spec.Host != managedHost {
-		replaced := a.Route.Spec.Host
-		a.Route.Spec.Host = managedHost
-
-		a.RemoveTLS([]string{replaced})
-		return []string{replaced}
-	}
-	return []string{}
-}
-
-func (a *Route) GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error) {
+func (a *Route) GetDNSTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error) {
 	targets := map[logicalcluster.Name]map[string]dns.Target{}
 	statuses, err := a.getStatuses()
 	if err != nil {
@@ -149,7 +138,6 @@ func (a *Route) GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[lo
 
 func (a *Route) ProcessCustomHosts(ctx context.Context, dvs *v1.DomainVerificationList, createOrUpdate CreateOrUpdateTraffic, delete DeleteTraffic) error {
 	generatedHost := metadata.GetAnnotation(a.Route, ANNOTATION_HCG_HOST)
-
 	//don't process custom hosts for shadows
 	if metadata.HasAnnotation(a.Route, ANNOTATION_IS_GLBC_SHADOW) {
 		return nil

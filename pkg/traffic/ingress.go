@@ -9,6 +9,7 @@ import (
 	"github.com/kcp-dev/logicalcluster/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/strings/slices"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/_internal/slice"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/dns"
-	corev1 "k8s.io/api/core/v1"
 )
 
 func NewIngress(i *networkingv1.Ingress) *Ingress {
@@ -97,21 +97,7 @@ func (a *Ingress) RemoveTLS(hosts []string) {
 	}
 }
 
-func (a *Ingress) ReplaceCustomHosts(managedHost string) []string {
-	var customHosts []string
-	for i, rule := range a.Spec.Rules {
-		if rule.Host != managedHost {
-			a.Spec.Rules[i].Host = managedHost
-			customHosts = append(customHosts, rule.Host)
-		}
-	}
-	// clean up replaced hosts from the tls list
-	a.RemoveTLS(customHosts)
-
-	return customHosts
-}
-
-func (a *Ingress) GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error) {
+func (a *Ingress) GetDNSTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error) {
 	statuses, err := a.getStatuses()
 	if err != nil {
 		return nil, err
@@ -155,18 +141,26 @@ func (a *Ingress) GetSpec() interface{} {
 	return a.Spec
 }
 
-func (a *Ingress) ApplyTransforms(old Interface) error {
-	rulesPatch := patch{
-		OP:    "replace",
-		Path:  "/rules",
-		Value: a.Spec.Rules,
+func (a *Ingress) Transform(old Interface) error {
+	oldIngress := old.(*Ingress)
+	patches := []patch{}
+	fmt.Println("pre transform ", a.Spec.Rules, a.Spec.TLS)
+	if !equality.Semantic.DeepEqual(a.Spec.Rules, oldIngress.Spec.Rules) {
+		rulesPatch := patch{
+			OP:    "replace",
+			Path:  "/rules",
+			Value: a.Spec.Rules,
+		}
+		patches = append(patches, rulesPatch)
 	}
-	tlsPatch := patch{
-		OP:    "replace",
-		Path:  "/tls",
-		Value: a.Spec.TLS,
+	if !equality.Semantic.DeepEqual(a.Spec.TLS, oldIngress.Spec.TLS) {
+		tlsPatch := patch{
+			OP:    "replace",
+			Path:  "/tls",
+			Value: a.Spec.TLS,
+		}
+		patches = append(patches, tlsPatch)
 	}
-	patches := []patch{rulesPatch, tlsPatch}
 	if err := applyTransformPatches(patches, a); err != nil {
 		return err
 	}
@@ -202,7 +196,8 @@ func (a *Ingress) getStatuses() (map[logicalcluster.Name]networkingv1.IngressSta
 	}
 
 	cluster := logicalcluster.From(a)
-	if _, ok := statuses[cluster]; !ok {
+	if !tmcEnabled(a) {
+		// when tmc enabled we don't want this status
 		statuses[cluster] = a.Status
 	}
 	return statuses, nil
@@ -212,6 +207,7 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 	generatedHost, ok := a.GetAnnotations()[ANNOTATION_HCG_HOST]
 	var unverifiedRules []networkingv1.IngressRule
 	var verifiedRules []networkingv1.IngressRule
+	replacedHosts := []string{}
 	if !ok || generatedHost == "" {
 		return ErrGeneratedHostMissing
 	}
@@ -219,7 +215,7 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 	for _, rule := range a.Spec.Rules {
 		//ignore any rules for generated unverifiedHosts (these are recalculated later)
 		if rule.Host == generatedHost {
-			//	verifiedRules = append(verifiedRules, rule)
+			verifiedRules = append(verifiedRules, rule)
 			continue
 		}
 
@@ -236,9 +232,10 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 		generatedHostRule.Host = generatedHost
 		verifiedRules = append(verifiedRules, generatedHostRule)
 	}
+
 	if len(unverifiedRules) > 0 {
 		metadata.AddLabel(a, LABEL_HAS_PENDING_HOSTS, "true")
-		replacedHosts := []string{}
+
 		for _, uh := range unverifiedRules {
 			replacedHosts = append(replacedHosts, uh.Host)
 		}
@@ -253,6 +250,7 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 	}
 	//This needs to be done before we check the pending
 	a.Spec.Rules = verifiedRules
+	a.RemoveTLS(replacedHosts)
 
 	if !a.TMCEnabed() {
 		//TODO(TMC remove below code when TMC is the default)

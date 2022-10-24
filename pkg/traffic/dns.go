@@ -56,7 +56,7 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 	activeDNSTargetIPs := map[string][]string{}
 	deletingTargetIPs := map[string][]string{}
 
-	targets, err := accessor.GetTargets(ctx, r.DNSLookup)
+	targets, err := accessor.GetDNSTargets(ctx, r.DNSLookup)
 	if err != nil {
 		return ReconcileStatusContinue, err
 	}
@@ -125,6 +125,8 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 			return ReconcileStatusStop, err
 		}
 	}
+	// set the DNS load balancer in the ingress status
+	accessor.SetDNSLBHost(managedHost)
 
 	return ReconcileStatusContinue, nil
 }

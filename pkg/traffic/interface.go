@@ -35,17 +35,13 @@ const (
 	FINALIZER_CASCADE_CLEANUP           = "kuadrant.dev/cascade-cleanup"
 )
 
-<<<<<<< HEAD
-type dnsLookupFunc func(ctx context.Context, host string) ([]dns.HostAddress, error)
-=======
 type patch struct {
 	OP    string      `json:"op"`
 	Path  string      `json:"path"`
 	Value interface{} `json:"value"`
 }
 
-type dnsLookupFunc func(ctx context.Context, host string) ([]net.HostAddress, error)
->>>>>>> 110e82b... wip transforms
+type dnsLookupFunc func(ctx context.Context, host string) ([]dns.HostAddress, error)
 type CreateOrUpdateTraffic func(ctx context.Context, i Interface) error
 type DeleteTraffic func(ctx context.Context, i Interface) error
 
@@ -55,13 +51,12 @@ type Interface interface {
 	GetKind() string
 	GetHosts() []string
 	SetDNSLBHost(string)
-	ApplyTransforms(previous Interface) error
-	GetTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error)
+	Transform(previous Interface) error
+	GetDNSTargets(ctx context.Context, dnsLookup dnsLookupFunc) (map[logicalcluster.Name]map[string]dns.Target, error)
 	GetLogicalCluster() logicalcluster.Name
 	GetNamespaceName() types.NamespacedName
 	AddTLS(host string, secret *corev1.Secret)
 	RemoveTLS(host []string)
-	ReplaceCustomHosts(managedHost string) []string
 	ProcessCustomHosts(context.Context, *v1.DomainVerificationList, CreateOrUpdateTraffic, DeleteTraffic) error
 	GetSyncTargets() []string
 	GetSpec() interface{}

@@ -30,7 +30,6 @@ func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) e
 		&traffic.HostReconciler{
 			ManagedDomain:          c.domain,
 			Log:                    c.Logger,
-			CustomHostsEnabled:     c.customHostsEnabled,
 			KuadrantClient:         c.kuadrantClient,
 			GetDomainVerifications: c.getDomainVerifications,
 			CreateOrUpdateTraffic:  c.createOrUpdateIngress,
