@@ -156,7 +156,7 @@ func (a *Ingress) GetSpec() interface{} {
 func (a *Ingress) Transform(old Interface) error {
 	oldIngress := old.(*Ingress)
 	patches := []patch{}
-	if !equality.Semantic.DeepEqual(a.Spec.Rules, oldIngress.Spec.Rules) {
+	if a.Spec.Rules != nil && !equality.Semantic.DeepEqual(a.Spec.Rules, oldIngress.Spec.Rules) {
 		rulesPatch := patch{
 			OP:    "replace",
 			Path:  "/rules",
@@ -164,7 +164,7 @@ func (a *Ingress) Transform(old Interface) error {
 		}
 		patches = append(patches, rulesPatch)
 	}
-	if !equality.Semantic.DeepEqual(a.Spec.TLS, oldIngress.Spec.TLS) {
+	if a.Spec.TLS != nil && !equality.Semantic.DeepEqual(a.Spec.TLS, oldIngress.Spec.TLS) {
 		tlsPatch := patch{
 			OP:    "replace",
 			Path:  "/tls",
@@ -227,6 +227,7 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 	for _, rule := range a.Spec.Rules {
 		//ignore any rules for generated unverifiedHosts (these are recalculated later)
 		if rule.Host == generatedHost {
+			verifiedRules = append(verifiedRules, rule)
 			continue
 		}
 
@@ -279,10 +280,20 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 				}
 			}
 			for _, pendingRule := range pending.Rules {
-				//recalculate the generatedhost rule in the spec
 				generatedHostRule := *pendingRule.DeepCopy()
 				generatedHostRule.Host = generatedHost
-				a.Spec.Rules = append(a.Spec.Rules, generatedHostRule)
+				foundGeneratedRule := false
+				// if the rule already exists continue on
+				for _, rule := range a.Spec.Rules {
+					if equality.Semantic.DeepEqual(rule, generatedHostRule) {
+						foundGeneratedRule = true
+						break
+					}
+				}
+				//not already present so add the generatedhost rule in the spec
+				if !foundGeneratedRule {
+					a.Spec.Rules = append(a.Spec.Rules, generatedHostRule)
+				}
 
 				//check against domainverification status
 				if IsDomainVerified(pendingRule.Host, dvs.Items) || pendingRule.Host == "" {

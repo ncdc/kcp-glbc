@@ -105,18 +105,20 @@ func IsDomainVerified(host string, dvs []v1.DomainVerification) bool {
 }
 
 func applyTransformPatches(patches []patch, object Interface) error {
-	d, err := json.Marshal(patches)
-	if err != nil {
-		return fmt.Errorf("failed to marshal ingress transform patch %s", err)
-	}
 	// reset spec diffs
 	_, existingDiffs := metadata.HasAnnotationsContaining(object, workload.ClusterSpecDiffAnnotationPrefix)
 	for ek := range existingDiffs {
 		metadata.RemoveAnnotation(object, ek)
 	}
-	// and spec diff for any sync target
-	for _, c := range object.GetSyncTargets() {
-		metadata.AddAnnotation(object, workload.ClusterSpecDiffAnnotationPrefix+c, string(d))
+	if len(patches) != 0 {
+		d, err := json.Marshal(patches)
+		if err != nil {
+			return fmt.Errorf("failed to marshal ingress transform patch %s", err)
+		}
+		// and spec diff for any sync target
+		for _, c := range object.GetSyncTargets() {
+			metadata.AddAnnotation(object, workload.ClusterSpecDiffAnnotationPrefix+c, string(d))
+		}
 	}
 
 	return nil
