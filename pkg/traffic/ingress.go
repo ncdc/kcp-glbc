@@ -227,7 +227,6 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 	for _, rule := range a.Spec.Rules {
 		//ignore any rules for generated unverifiedHosts (these are recalculated later)
 		if rule.Host == generatedHost {
-			verifiedRules = append(verifiedRules, rule)
 			continue
 		}
 
@@ -280,20 +279,10 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 				}
 			}
 			for _, pendingRule := range pending.Rules {
+				//recalculate the generatedhost rule in the spec
 				generatedHostRule := *pendingRule.DeepCopy()
 				generatedHostRule.Host = generatedHost
-				foundGeneratedRule := false
-				// if the rule already exists continue on
-				for _, rule := range a.Spec.Rules {
-					if equality.Semantic.DeepEqual(rule, generatedHostRule) {
-						foundGeneratedRule = true
-						break
-					}
-				}
-				//not already present so add the generatedhost rule in the spec
-				if !foundGeneratedRule {
-					a.Spec.Rules = append(a.Spec.Rules, generatedHostRule)
-				}
+				a.Spec.Rules = append(a.Spec.Rules, generatedHostRule)
 
 				//check against domainverification status
 				if IsDomainVerified(pendingRule.Host, dvs.Items) || pendingRule.Host == "" {

@@ -7,7 +7,6 @@ import (
 	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	testSupport "github.com/kuadrant/kcp-glbc/test/support"
-	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -103,32 +102,6 @@ func TestProcessCustomHosts(t *testing.T) {
 				}},
 			},
 		},
-		{
-			Name: "test existing glbc host in spec left in place tmc not enabled",
-			OriginalIngress: func() *networkingv1.Ingress {
-				ing := defaultTestIngress([]string{"guid.hcg.com"}, "test", []networkingv1.IngressTLS{
-					{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
-				})
-				ing.Status = networkingv1.IngressStatus{
-					LoadBalancer: v1.LoadBalancerStatus{
-						Ingress: []v1.LoadBalancerIngress{
-							{
-								Hostname: "something.com",
-							},
-						},
-					},
-				}
-				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com"}
-				return ing
-			},
-			ExpectedIngress: func() *networkingv1.Ingress {
-				ing := defaultTestIngress([]string{"guid.hcg.com"}, "test", []networkingv1.IngressTLS{
-					{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
-				})
-				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com"}
-				return ing
-			},
-		},
 	}
 
 	for _, tc := range cases {
@@ -163,43 +136,78 @@ func TestApplyTransformsIngress(t *testing.T) {
 	cases := []struct {
 		Name string
 		// OriginalIngress is the ingress as the user created it
-		OriginalIngress *networkingv1.Ingress
+		OriginalIngress func() *networkingv1.Ingress
 		// ReconciledIngress is the ingress after the controller has done its work and ready to save it
-		ReconciledIngress *networkingv1.Ingress
+		ReconciledIngress func() *networkingv1.Ingress
+		ExpectTLSDiff     bool
+		ExpectRulesDiff   bool
 		ExpectErr         bool
 	}{
 		{
-			Name:              "test original spec not changed post reconcile and transforms applied single host",
-			OriginalIngress:   defaultTestIngress([]string{"test.com"}, "test", nil),
-			ReconciledIngress: defaultTestIngress([]string{"guid.example.com"}, "test", nil),
+			Name: "test original spec not changed post reconcile and transforms applied single host",
+			OriginalIngress: func() *networkingv1.Ingress {
+				return defaultTestIngress([]string{"test.com"}, "test", nil)
+			},
+			ReconciledIngress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"guid.example.com"}, "test", []networkingv1.IngressTLS{
+					{Hosts: []string{"guid.example.com"}, SecretName: "glbc"},
+				})
+				ing.Labels = map[string]string{
+					"state.workload.kcp.dev/c1": "Sync",
+				}
+				return ing
+			},
+			ExpectTLSDiff:   true,
+			ExpectRulesDiff: true,
 		},
 		{
 			Name: "test original spec not changed post reconcile and transforms applied multiple verified hosts",
-			OriginalIngress: defaultTestIngress([]string{"test.com", "api.test.com"}, "test", []networkingv1.IngressTLS{
-				{Hosts: []string{"test.com", "api.test.com"}, SecretName: "test"}}),
-			ReconciledIngress: defaultTestIngress([]string{"test.com", "api.test.com", "guid.example.com"}, "test", []networkingv1.IngressTLS{
-				{Hosts: []string{"guid.example.com"}, SecretName: "glbc"},
-				{Hosts: []string{"test.com", "api.test.com"}, SecretName: "test"},
-			}),
+			OriginalIngress: func() *networkingv1.Ingress {
+				return defaultTestIngress([]string{"test.com", "api.test.com"}, "test", []networkingv1.IngressTLS{
+					{Hosts: []string{"test.com", "api.test.com"}, SecretName: "test"}})
+			},
+			ReconciledIngress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"test.com", "api.test.com", "guid.example.com"}, "test", []networkingv1.IngressTLS{
+					{Hosts: []string{"guid.example.com"}, SecretName: "glbc"},
+					{Hosts: []string{"test.com", "api.test.com"}, SecretName: "test"},
+				})
+				ing.Labels = map[string]string{
+					"state.workload.kcp.dev/c1": "Sync",
+				}
+				return ing
+			},
+			ExpectTLSDiff:   true,
+			ExpectRulesDiff: true,
+		},
+		{
+			Name: "test original spec not changed post reconcile if generated host in spec",
+			OriginalIngress: func() *networkingv1.Ingress {
+				return defaultTestIngress([]string{"guid.example.com"}, "test", []networkingv1.IngressTLS{
+					{Hosts: []string{"test.com"}, SecretName: "test"}, {Hosts: []string{"guid.example.com"}, SecretName: "glbc"}})
+			},
+			ReconciledIngress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"guid.example.com"}, "test", []networkingv1.IngressTLS{
+					{Hosts: []string{"guid.example.com"}, SecretName: "glbc"},
+				})
+				ing.Labels = map[string]string{
+					"state.workload.kcp.dev/c1": "Sync",
+				}
+				return ing
+			},
+			ExpectTLSDiff: true,
 		},
 	}
 
 	for _, testCase := range cases {
 		t.Run(testCase.Name, func(t *testing.T) {
 			// take a copy before we apply transforms this will have all the expected changes to the spec
-			transformedCopy := testCase.ReconciledIngress.DeepCopy()
-			reconciled := traffic.NewIngress(testCase.ReconciledIngress)
-			original := traffic.NewIngress(testCase.OriginalIngress)
+			reconciled := testCase.ReconciledIngress()
+			transformedCopy := reconciled.DeepCopy()
+			reconciledIng := traffic.NewIngress(reconciled)
+			orignal := testCase.OriginalIngress()
+			originalIng := traffic.NewIngress(orignal)
 			// Apply transforms, this will reset the spec to the original once done
-			err := reconciled.Transform(original)
-			// after the transform is done, we should have the specs of the original and transformed remain the same
-			if !equality.Semantic.DeepEqual(testCase.OriginalIngress.Spec, testCase.ReconciledIngress.Spec) {
-				t.Fatalf("expected the spec of the orignal and transformed to have remained the same. Expected %v Got %v", testCase.OriginalIngress.Spec, testCase.ReconciledIngress.Spec)
-			}
-			// we should now have annotations applying the transforms. Validate the transformed spec matches the transform annotations.
-			if err := testSupport.ValidateTransformedIngress(transformedCopy.Spec, reconciled); err != nil {
-				t.Fatalf("transforms were invalid %s", err)
-			}
+			err := reconciledIng.Transform(originalIng)
 			if testCase.ExpectErr {
 				if err == nil {
 					t.Fatalf("expected an error but got none")
@@ -209,6 +217,16 @@ func TestApplyTransformsIngress(t *testing.T) {
 					t.Fatalf("did not expect an error but got %v", err)
 				}
 			}
+			// after the transform is done, we should have the specs of the original and transformed remain the same
+			if !equality.Semantic.DeepEqual(orignal.Spec, reconciled.Spec) {
+				t.Fatalf("expected the spec of the orignal and transformed to have remained the same. Expected %v Got %v", orignal.Spec, reconciled.Spec)
+			}
+			t.Log(reconciledIng.Annotations)
+			// we should now have annotations applying the transforms. Validate the transformed spec matches the transform annotations.
+			if err := testSupport.ValidateTransformedIngress(transformedCopy.Spec, reconciledIng, testCase.ExpectRulesDiff, testCase.ExpectTLSDiff); err != nil {
+				t.Fatalf("transforms were invalid %s", err)
+			}
+
 		})
 	}
 

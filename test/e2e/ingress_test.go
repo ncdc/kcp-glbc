@@ -219,7 +219,7 @@ func TestIngress(t *testing.T) {
 	// Test that our transforms have the expected spec and that our status is set to the generated host
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutShort).Should(And(
 		Satisfy(OriginalSpecUnchanged(test, &originalIngress.Spec)),
-		Satisfy(TransformedSpec(test, GetDefaultSpec(glbcHost, secretName, name))),
+		Satisfy(TransformedSpec(test, GetDefaultSpec(glbcHost, secretName, name), true, true)),
 		//check that we have a LB set to our generated host
 		WithTransform(LoadBalancerIngresses, HaveLen(1)),
 		Satisfy(LBHostEqualToGeneratedHost),
@@ -251,7 +251,7 @@ func TestIngress(t *testing.T) {
 	// see custom host is not active in ingress
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutMedium).Should(And(
 		Satisfy(OriginalSpecUnchanged(test, &originalIngress.Spec)),
-		Satisfy(TransformedSpec(test, GetDefaultSpec(glbcHost, secretName, name))),
+		Satisfy(TransformedSpec(test, GetDefaultSpec(glbcHost, secretName, name), true, true)),
 	))
 	test.T().Log("domain not verified custom host not propigated to cluster")
 
@@ -279,7 +279,7 @@ func TestIngress(t *testing.T) {
 
 	// now we have built up our expected transformed spec check it is the same as the transformations applied to the annotations
 	test.Eventually(Ingress(test, namespace, name)).WithTimeout(TestTimeoutShort).Should(And(
-		Satisfy(TransformedSpec(test, withCustomDomain)),
+		Satisfy(TransformedSpec(test, withCustomDomain, true, true)),
 	))
 
 	test.T().Log("ingress is transformed correctly and in final state")

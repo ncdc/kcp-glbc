@@ -74,7 +74,7 @@ func IngressEndpoints(t Test, ingress *traffic.Ingress, res dns.HostResolver) []
 
 }
 
-func ValidateTransformedIngress(expectedSpec networkingv1.IngressSpec, transformed *traffic.Ingress) error {
+func ValidateTransformedIngress(expectedSpec networkingv1.IngressSpec, transformed *traffic.Ingress, expectRulesPatch, expectTLSPatch bool) error {
 	st := transformed.GetSyncTargets()
 	for _, target := range st {
 		// ensure each target has a transform value set and it is correct
@@ -123,10 +123,10 @@ func ValidateTransformedIngress(expectedSpec networkingv1.IngressSpec, transform
 				}
 			}
 		}
-		if !rulesPatch {
+		if !rulesPatch && expectRulesPatch {
 			return fmt.Errorf("expected to find a rules patch but one was missing")
 		}
-		if !tlsPatch {
+		if !tlsPatch && expectTLSPatch {
 			return fmt.Errorf("expected to find a tls patch but one was missing")
 		}
 
@@ -135,10 +135,10 @@ func ValidateTransformedIngress(expectedSpec networkingv1.IngressSpec, transform
 }
 
 // TransformedSpec will look at the transforms applied and compare them to the expected spec. cbrookes TODO(look at whether we could take the ingress apply configuration)
-func TransformedSpec(test Test, expectedSpec networkingv1.IngressSpec) func(ingress *traffic.Ingress) bool {
+func TransformedSpec(test Test, expectedSpec networkingv1.IngressSpec, expectRulesDiff, expectTLSDiff bool) func(ingress *traffic.Ingress) bool {
 	test.T().Log("Validating transformed spec for ingress")
 	return func(ingress *traffic.Ingress) bool {
-		if err := ValidateTransformedIngress(expectedSpec, ingress); err != nil {
+		if err := ValidateTransformedIngress(expectedSpec, ingress, expectRulesDiff, expectTLSDiff); err != nil {
 			test.T().Log("transformed spec is not valid", err)
 			return false
 

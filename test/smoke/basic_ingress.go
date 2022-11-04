@@ -164,7 +164,7 @@ func TestIngressBasic(t Test, ingressCount int, zoneID, glbcDomain string) {
 			)),
 			WithTransform(LoadBalancerIngresses, HaveLen(1)),
 			//No custom hosts approved so only expect our default spec in the transform
-			Satisfy(TransformedSpec(t, GetDefaultSpec(generatedHost, tlsSecretName, name))),
+			Satisfy(TransformedSpec(t, GetDefaultSpec(generatedHost, tlsSecretName, name), true, true)),
 			Satisfy(LBHostEqualToGeneratedHost),
 		))
 	}
