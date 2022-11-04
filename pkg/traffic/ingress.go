@@ -251,7 +251,7 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 		for _, uh := range unverifiedRules {
 			replacedHosts = append(replacedHosts, uh.Host)
 		}
-		metadata.AddAnnotation(a, ANNOTATION_HCG_CUSTOM_HOST_REPLACED, fmt.Sprintf(" replaced custom hosts as they are not verfified %v", replacedHosts))
+		metadata.AddAnnotation(a, ANNOTATION_HCG_CUSTOM_HOST_REPLACED, fmt.Sprintf("%v", replacedHosts))
 	} else {
 		metadata.RemoveLabel(a, LABEL_HAS_PENDING_HOSTS)
 		metadata.RemoveAnnotation(a, ANNOTATION_HCG_CUSTOM_HOST_REPLACED)

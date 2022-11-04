@@ -1,14 +1,163 @@
 package traffic_test
 
 import (
+	"context"
 	"testing"
 
+	kuadrantv1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
 	testSupport "github.com/kuadrant/kcp-glbc/test/support"
+	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func defaultTestIngress(hosts []string, backend string, tls []networkingv1.IngressTLS) *networkingv1.Ingress {
+
+	rules := []networkingv1.IngressRule{}
+	for _, h := range hosts {
+		rules = append(rules, networkingv1.IngressRule{
+			Host: h,
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{
+						{Path: "/", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: backend}}},
+					},
+				},
+			},
+		})
+	}
+
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: rules,
+		},
+	}
+
+	ing.Spec.TLS = tls
+
+	return ing
+}
+
+func TestProcessCustomHosts(t *testing.T) {
+	cases := []struct {
+		Name                string
+		OriginalIngress     func() *networkingv1.Ingress
+		ExpectedIngress     func() *networkingv1.Ingress
+		DomainVerifications *kuadrantv1.DomainVerificationList
+		ExpectErr           bool
+	}{
+		{
+			Name: "test unverified host removed and replaced with glbc host",
+			OriginalIngress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"example.com"}, "test",
+					[]networkingv1.IngressTLS{
+						{Hosts: []string{"example.com"}, SecretName: "test"},
+						{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
+					})
+				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com"}
+				return ing
+			},
+			ExpectedIngress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"guid.hcg.com"}, "test", []networkingv1.IngressTLS{
+					{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
+				})
+				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com", traffic.ANNOTATION_HCG_CUSTOM_HOST_REPLACED: "[example.com]"}
+				ing.Labels = map[string]string{traffic.LABEL_HAS_PENDING_HOSTS: "true"}
+				return ing
+			},
+			DomainVerifications: &kuadrantv1.DomainVerificationList{},
+		},
+		{
+			Name: "test verfied host left in place and glbc rule appended",
+			OriginalIngress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"example.com"}, "test",
+					[]networkingv1.IngressTLS{
+						{Hosts: []string{"example.com"}, SecretName: "test"},
+						{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
+					})
+				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com"}
+				return ing
+			},
+			ExpectedIngress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"example.com", "guid.hcg.com"}, "test",
+					[]networkingv1.IngressTLS{
+						{Hosts: []string{"example.com"}, SecretName: "test"},
+						{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
+					})
+				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com"}
+				return ing
+			},
+			DomainVerifications: &kuadrantv1.DomainVerificationList{
+				Items: []kuadrantv1.DomainVerification{{
+					Spec: kuadrantv1.DomainVerificationSpec{
+						Domain: "example.com",
+					},
+					Status: kuadrantv1.DomainVerificationStatus{
+						Verified: true,
+					},
+				}},
+			},
+		},
+		{
+			Name: "test existing glbc host in spec left in place tmc not enabled",
+			OriginalIngress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"guid.hcg.com"}, "test", []networkingv1.IngressTLS{
+					{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
+				})
+				ing.Status = networkingv1.IngressStatus{
+					LoadBalancer: v1.LoadBalancerStatus{
+						Ingress: []v1.LoadBalancerIngress{
+							{
+								Hostname: "something.com",
+							},
+						},
+					},
+				}
+				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com"}
+				return ing
+			},
+			ExpectedIngress: func() *networkingv1.Ingress {
+				ing := defaultTestIngress([]string{"guid.hcg.com"}, "test", []networkingv1.IngressTLS{
+					{Hosts: []string{"guid.hcg.com"}, SecretName: "guid-hcg-com"},
+				})
+				ing.Annotations = map[string]string{traffic.ANNOTATION_HCG_HOST: "guid.hcg.com"}
+				return ing
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			ing := traffic.NewIngress(tc.OriginalIngress())
+			err := ing.ProcessCustomHosts(context.TODO(), tc.DomainVerifications, nil, nil)
+			if tc.ExpectErr && err == nil {
+				t.Fatalf("expected an error for ProcessCustomHosts but got none")
+			}
+			if !tc.ExpectErr && err != nil {
+				t.Fatalf("did not expect an error for ProcessCustomHosts but got %s ", err)
+			}
+			expected := traffic.NewIngress(tc.ExpectedIngress())
+			if !equality.Semantic.DeepEqual(ing.Spec, expected.Spec) {
+				t.Log("exp spec", expected.Spec)
+				t.Log("got spec", ing.Spec)
+				t.Fatalf("expected processi ingress to match the expected ingress ")
+			}
+			if !equality.Semantic.DeepEqual(ing.Annotations, expected.Annotations) {
+				t.Log("exp annotations", expected.Annotations)
+				t.Log("got annotations", ing.Annotations)
+			}
+			if !equality.Semantic.DeepEqual(ing.Labels, expected.Labels) {
+				t.Log("exp labels", expected.Labels)
+				t.Log("got labels", ing.Labels)
+			}
+		})
+	}
+}
 
 func TestApplyTransformsIngress(t *testing.T) {
 	cases := []struct {
@@ -20,151 +169,18 @@ func TestApplyTransformsIngress(t *testing.T) {
 		ExpectErr         bool
 	}{
 		{
-			Name: "test original spec not changed post reconcile and transforms applied single host",
-			OriginalIngress: &networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Annotations: map[string]string{
-						"experimental.status.workload.kcp.dev/c1": "",
-					},
-					Labels: map[string]string{
-						"state.workload.kcp.dev/c1": "Sync",
-					},
-				},
-				Spec: networkingv1.IngressSpec{
-					Rules: []networkingv1.IngressRule{
-						{
-							Host: "test.com",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{Path: "/", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "test"}}},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			ReconciledIngress: &networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Annotations: map[string]string{
-						"experimental.status.workload.kcp.dev/c1": "",
-						"experimental.status.workload.kcp.dev/c2": "",
-					},
-					Labels: map[string]string{
-						"state.workload.kcp.dev/c1": "Sync",
-						"state.workload.kcp.dev/c2": "Sync",
-					},
-				},
-				Spec: networkingv1.IngressSpec{
-					Rules: []networkingv1.IngressRule{
-						{
-							Host: "guid.example.com",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{Path: "/", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "test"}}},
-									},
-								},
-							},
-						},
-					},
-					TLS: []networkingv1.IngressTLS{
-						{Hosts: []string{"guid.example.com"}, SecretName: "test"},
-					},
-				},
-			},
+			Name:              "test original spec not changed post reconcile and transforms applied single host",
+			OriginalIngress:   defaultTestIngress([]string{"test.com"}, "test", nil),
+			ReconciledIngress: defaultTestIngress([]string{"guid.example.com"}, "test", nil),
 		},
 		{
 			Name: "test original spec not changed post reconcile and transforms applied multiple verified hosts",
-			OriginalIngress: &networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Annotations: map[string]string{
-						"experimental.status.workload.kcp.dev/c1": "",
-					},
-					Labels: map[string]string{
-						"state.workload.kcp.dev/c1": "Sync",
-					},
-				},
-				Spec: networkingv1.IngressSpec{
-					Rules: []networkingv1.IngressRule{
-						{
-							Host: "test.com",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{Path: "/", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "test"}}},
-									},
-								},
-							},
-						},
-						{
-							Host: "test2.com",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{Path: "/", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "test"}}},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			ReconciledIngress: &networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Annotations: map[string]string{
-						"experimental.status.workload.kcp.dev/c1": "",
-						"experimental.status.workload.kcp.dev/c2": "",
-					},
-					Labels: map[string]string{
-						"state.workload.kcp.dev/c1": "Sync",
-						"state.workload.kcp.dev/c2": "Sync",
-					},
-				},
-				Spec: networkingv1.IngressSpec{
-					Rules: []networkingv1.IngressRule{
-						{
-							Host: "test.com",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{Path: "/", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "test"}}},
-									},
-								},
-							},
-						},
-						{
-							Host: "api.test.com",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{Path: "/", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "test"}}},
-									},
-								},
-							},
-						},
-						{
-							Host: "guid.example.com",
-							IngressRuleValue: networkingv1.IngressRuleValue{
-								HTTP: &networkingv1.HTTPIngressRuleValue{
-									Paths: []networkingv1.HTTPIngressPath{
-										{Path: "/", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "test"}}},
-									},
-								},
-							},
-						},
-					},
-					TLS: []networkingv1.IngressTLS{
-						{Hosts: []string{"guid.example.com"}, SecretName: "glbc"},
-						{Hosts: []string{"test.com", "api.test.com"}, SecretName: "test"},
-					},
-				},
-			},
+			OriginalIngress: defaultTestIngress([]string{"test.com", "api.test.com"}, "test", []networkingv1.IngressTLS{
+				{Hosts: []string{"test.com", "api.test.com"}, SecretName: "test"}}),
+			ReconciledIngress: defaultTestIngress([]string{"test.com", "api.test.com", "guid.example.com"}, "test", []networkingv1.IngressTLS{
+				{Hosts: []string{"guid.example.com"}, SecretName: "glbc"},
+				{Hosts: []string{"test.com", "api.test.com"}, SecretName: "test"},
+			}),
 		},
 	}
 

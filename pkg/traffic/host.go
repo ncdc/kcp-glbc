@@ -9,13 +9,11 @@ import (
 
 	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
-	kuadrantclientv1 "github.com/kuadrant/kcp-glbc/pkg/client/kuadrant/clientset/versioned"
 )
 
 type HostReconciler struct {
 	ManagedDomain          string
 	Log                    logr.Logger
-	KuadrantClient         kuadrantclientv1.ClusterInterface
 	GetDomainVerifications func(ctx context.Context, accessor Interface) (*v1.DomainVerificationList, error)
 	CreateOrUpdateTraffic  CreateOrUpdateTraffic
 	DeleteTraffic          DeleteTraffic
@@ -34,8 +32,6 @@ func (r *HostReconciler) Reconcile(ctx context.Context, accessor Interface) (Rec
 		// if this is not saved we end up with a new host and the certificate can have the wrong host
 		return ReconcileStatusStop, nil
 	}
-	//TODO this should only be set once everything is ready (DNS, and Certificate)
-	//https://github.com/kcp-dev/kcp-glbc/issues/399
 	dvs, err := r.GetDomainVerifications(ctx, accessor)
 	if err != nil {
 		return ReconcileStatusContinue, fmt.Errorf("error getting domain verifications: %v", err)

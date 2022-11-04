@@ -64,6 +64,10 @@ type Interface interface {
 	TMCEnabed() bool
 }
 
+type DNSService interface {
+	DNSHost(traffic Interface) (string, error)
+}
+
 func tmcEnabled(obj metav1.Object) bool {
 	has, _ := metadata.HasAnnotationsContaining(obj, workload.InternalClusterStatusAnnotationPrefix)
 	return has
