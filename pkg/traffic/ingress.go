@@ -12,6 +12,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/strings/slices"
 
 	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
@@ -41,6 +42,16 @@ func (a *Ingress) SetDNSLBHost(host string) {
 
 }
 
+func (a *Ingress) HasDNSLBHost() bool {
+	var hasHost bool
+	for _, i := range a.Ingress.Status.LoadBalancer.Ingress {
+		if i.Hostname != "" {
+			hasHost = true
+		}
+	}
+	return hasHost
+}
+
 func (a *Ingress) SetHCGHost(s string) {
 	a.generatedHost = s
 }
@@ -49,8 +60,8 @@ func (a *Ingress) GetSyncTargets() []string {
 	return getSyncTargets(a.Ingress)
 }
 
-// TMCEnabed this is a very temporary solution to allow us to work with both advanced and none advanced scheduling clusters. IT SHOULD BE REMOVED ASAP
-func (a *Ingress) TMCEnabed() bool {
+// TMCEnabled this is a very temporary solution to allow us to work with both advanced and none advanced scheduling clusters. IT SHOULD BE REMOVED ASAP
+func (a *Ingress) TMCEnabled() bool {
 	// check the annotations for status
 	if tmcEnabled(a) {
 		return true
@@ -173,7 +184,7 @@ func (a *Ingress) Transform(old Interface) error {
 		return err
 	}
 	// ensure we don't modify the actual spec (TODO TMC once transforms are default remove this check)
-	if a.TMCEnabed() {
+	if a.TMCEnabled() {
 		// we always assume tmc is enabled and do this until we are sure it is not enabled. We will be sure before the DNS is actually published as the check is based on status
 		oldSpec, ok := old.GetSpec().(networkingv1.IngressSpec)
 		if !ok {
@@ -253,14 +264,14 @@ func (a *Ingress) ProcessCustomHosts(_ context.Context, dvs *v1.DomainVerificati
 		metadata.RemoveAnnotation(a, ANNOTATION_HCG_CUSTOM_HOST_REPLACED)
 	}
 	// nuke any pending hosts as these will be in the spec when tmc enabled
-	if a.TMCEnabed() {
+	if a.TMCEnabled() {
 		delete(a.Annotations, ANNOTATION_PENDING_CUSTOM_HOSTS)
 	}
 	//This needs to be done before we check the pending
 	a.Spec.Rules = verifiedRules
 	a.RemoveTLS(replacedHosts)
 
-	if !a.TMCEnabed() {
+	if !a.TMCEnabled() {
 		//TODO(TMC remove below code when TMC is the default)
 
 		pending := &Pending{}
@@ -317,6 +328,11 @@ func (a *Ingress) GetNamespaceName() types.NamespacedName {
 		Namespace: a.Namespace,
 		Name:      a.Name,
 	}
+}
+
+func (a *Ingress) GetCacheKey() string {
+	key, _ := cache.MetaNamespaceKeyFunc(a)
+	return key
 }
 
 func (a *Ingress) String() string {

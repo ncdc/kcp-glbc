@@ -4,12 +4,12 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilserrors "k8s.io/apimachinery/pkg/util/errors"
 	apiRuntime "k8s.io/apimachinery/pkg/util/runtime"
-
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
@@ -61,6 +61,9 @@ func (c *Controller) reconcile(ctx context.Context, ingress traffic.Interface) e
 		if err != nil {
 			c.Logger.Error(err, "reconciler error: ", "ingress", ingress, "reconciler", r.GetName())
 			errs = append(errs, err)
+		}
+		if status == traffic.ReconcileStatusRequeueIn5Seconds {
+			c.Queue.AddAfter(ingress.GetCacheKey(), time.Second*5)
 		}
 		if status == traffic.ReconcileStatusStop {
 			break

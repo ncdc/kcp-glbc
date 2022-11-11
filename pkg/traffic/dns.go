@@ -3,11 +3,16 @@ package traffic
 import (
 	"context"
 	"fmt"
+	"net"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/kcp-dev/logicalcluster/v2"
+	"github.com/lixiangzhong/dnsutil"
+
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -16,8 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
-
-	"github.com/kcp-dev/logicalcluster/v2"
 
 	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 	"github.com/rs/xid"
@@ -152,9 +155,25 @@ func (r *DnsReconciler) Reconcile(ctx context.Context, accessor Interface) (Reco
 			return ReconcileStatusStop, err
 		}
 	}
-	// Once we know the DNS is creatd up and TMC is enabled for this ingress (IE status is stored in annotations) set the DNS load balancer in the ingress status.
-	if accessor.TMCEnabed() {
-		accessor.SetDNSLBHost(managedHost)
+
+	host := r.ManagedDomain
+	zoneID, _ := os.LookupEnv(aws.ZoneIDEnvVar)
+	dnsZone := &v1.DNSZone{
+		ID: zoneID,
+	}
+
+	// Once we know the DNS is created up and TMC is enabled for this ingress (IE status is stored in annotations) set the DNS load balancer in the ingress status.
+	if accessor.TMCEnabled() {
+		if !accessor.HasDNSLBHost() && len(copyDNS.Spec.Endpoints) > 0 && equality.Semantic.DeepEqual(copyDNS, existing) && dns.RecordIsAlreadyPublishedToZone(copyDNS, dnsZone) {
+			foundIPAddress := foundNameserversOfDomainAndIP(host, managedHost)
+			if foundIPAddress {
+				fmt.Print(" Setting DNS LB host to ingress status ")
+				accessor.SetDNSLBHost(managedHost)
+			} else {
+				fmt.Print(" IP address not yet found when digging managedHost ", managedHost, " against its nameservers. ")
+				return ReconcileStatusRequeueIn5Seconds, nil
+			}
+		}
 	}
 
 	return ReconcileStatusContinue, nil
@@ -206,6 +225,30 @@ func copyHealthAnnotations(dnsRecord *v1.DNSRecord, objectMeta metav1.Object) {
 	metadata.CopyAnnotationsPredicate(objectMeta, dnsRecord, metadata.KeyPredicate(func(key string) bool {
 		return strings.HasPrefix(key, ANNOTATION_HEALTH_CHECK_PREFIX)
 	}))
+}
+
+// foundNameserversOfDomainAndIP looks up for nameservers of a given domain, and performs a dig of the managed host against
+// the nameservers. It returns true if at least one A record is found.
+func foundNameserversOfDomainAndIP(host, managedHost string) bool {
+	nameservers, _ := net.LookupNS(host)
+	var dig dnsutil.Dig
+	var found bool
+	if len(nameservers) < 1 {
+		found = false
+	} else {
+		for _, ns := range nameservers {
+			_ = dig.At(ns.Host)
+			a, err := dig.A(managedHost)
+			if a != nil {
+				fmt.Println(" A record and IP address found ", a, err)
+				found = true
+				break
+			}
+
+		}
+
+	}
+	return found
 }
 
 func (r *DnsReconciler) setEndpointFromTargets(dnsName string, dnsTargets map[string][]string, dnsRecord *v1.DNSRecord) {

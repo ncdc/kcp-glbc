@@ -74,7 +74,7 @@ func (c *Controller) publishRecordToZones(zones []v1.DNSZone, record *v1.DNSReco
 		// Only publish the record if the DNSRecord has been modified
 		// (which would mean the target could have changed) or its
 		// status does not indicate that it has already been published.
-		if record.Generation == record.Status.ObservedGeneration && recordIsAlreadyPublishedToZone(record, &zone) {
+		if record.Generation == record.Status.ObservedGeneration && RecordIsAlreadyPublishedToZone(record, &zone) {
 			c.Logger.Info("Skipping zone to which the DNS record is already published", "record", record, "zone", zone)
 			continue
 		}
@@ -85,7 +85,7 @@ func (c *Controller) publishRecordToZones(zones []v1.DNSZone, record *v1.DNSReco
 			LastTransitionTime: metav1.Now(),
 		}
 
-		if recordIsAlreadyPublishedToZone(record, &zone) {
+		if RecordIsAlreadyPublishedToZone(record, &zone) {
 			c.Logger.Info("replacing DNS record", "record", record, "zone", zone)
 
 			if err := c.dnsProvider.Ensure(record, zone); err != nil {
@@ -127,7 +127,7 @@ func (c *Controller) deleteRecord(record *v1.DNSRecord) error {
 		zone := record.Status.Zones[i].DNSZone
 		// If the record is currently not published in a zone,
 		// skip deleting it for that zone.
-		if !recordIsAlreadyPublishedToZone(record, &zone) {
+		if !RecordIsAlreadyPublishedToZone(record, &zone) {
 			continue
 		}
 		err := c.dnsProvider.Delete(record, zone)
@@ -145,10 +145,10 @@ func (c *Controller) deleteRecord(record *v1.DNSRecord) error {
 	return utilerrors.NewAggregate(errs)
 }
 
-// recordIsAlreadyPublishedToZone returns a Boolean value indicating whether the
+// RecordIsAlreadyPublishedToZone returns a Boolean value indicating whether the
 // given DNSRecord is already published to the given zone, as determined from
 // the DNSRecord's status conditions.
-func recordIsAlreadyPublishedToZone(record *v1.DNSRecord, zoneToPublish *v1.DNSZone) bool {
+func RecordIsAlreadyPublishedToZone(record *v1.DNSRecord, zoneToPublish *v1.DNSZone) bool {
 	for _, zoneInStatus := range record.Status.Zones {
 		if !reflect.DeepEqual(&zoneInStatus.DNSZone, zoneToPublish) {
 			continue

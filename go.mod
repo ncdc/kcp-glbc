@@ -13,7 +13,8 @@ require (
 	github.com/kcp-dev/kcp v0.9.0
 	github.com/kcp-dev/kcp/pkg/apis v0.9.0
 	github.com/kcp-dev/logicalcluster/v2 v2.0.0-alpha.3
-	github.com/miekg/dns v1.1.34
+	github.com/lixiangzhong/dnsutil v1.4.0
+	github.com/miekg/dns v1.1.40
 	github.com/onsi/gomega v1.17.0
 	github.com/openshift/api v3.9.0+incompatible
 	github.com/prometheus/client_golang v1.12.1

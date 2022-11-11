@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kcp-dev/logicalcluster/v2"
 	routev1 "github.com/openshift/api/route/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 
 	workload "github.com/kcp-dev/kcp/pkg/apis/workload/v1alpha1"
 
+	"github.com/kcp-dev/logicalcluster/v2"
 	"github.com/kuadrant/kcp-glbc/pkg/_internal/log"
 	"github.com/kuadrant/kcp-glbc/pkg/_internal/metadata"
 	v1 "github.com/kuadrant/kcp-glbc/pkg/apis/kuadrant/v1"
@@ -48,7 +49,7 @@ func (a *Route) GetSpec() interface{} {
 	return a.Spec
 }
 
-func (a *Route) TMCEnabed() bool {
+func (a *Route) TMCEnabled() bool {
 	// check the annotations for status
 	if tmcEnabled(a) {
 		return true
@@ -76,6 +77,16 @@ func (a *Route) SetDNSLBHost(lbHost string) {
 	}
 }
 
+func (a *Route) HasDNSLBHost() bool {
+	var hasHost bool
+	for _, i := range a.Status.Ingress {
+		if i.Host != "" {
+			hasHost = true
+		}
+	}
+	return hasHost
+}
+
 func (a *Route) SetHCGHost(s string) {
 	a.generatedHost = s
 }
@@ -96,7 +107,7 @@ func (a *Route) Transform(previous Interface) error {
 		return err
 	}
 	// ensure we don't modify the actual spec (TODO TMC once transforms are default remove this check)
-	if a.TMCEnabed() {
+	if a.TMCEnabled() {
 		oldSpec, ok := previous.GetSpec().(routev1.RouteSpec)
 		if !ok {
 			return fmt.Errorf("expected the spec to be an RouteSpec %v", previous.GetSpec())
@@ -262,4 +273,9 @@ func (a *Route) getStatuses() (map[logicalcluster.Name]routev1.RouteStatus, erro
 	cluster := logicalcluster.From(a)
 	statuses[cluster] = a.Status
 	return statuses, nil
+}
+
+func (a *Route) GetCacheKey() string {
+	key, _ := cache.MetaNamespaceKeyFunc(a)
+	return key
 }
