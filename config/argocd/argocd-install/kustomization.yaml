@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - https://github.com/argoproj/argo-cd/manifests/cluster-install?ref=v2.4.12
+  - namespace.yaml
+  - ingress.yaml
+  - default-appprojects.yaml
+
+patches:
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: argocd-redis
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/securityContext
+      value: {}
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: argocd-server
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/command
+      value: ["argocd-server","--insecure"]
+- target:
+    kind: ConfigMap
+    name: argocd-rbac-cm
+  patch: |-
+    kind: ConfigMap
+    metadata:
+      name: argocd-rbac-cm
+    data:
+      policy.default: role:admin
+configMapGenerator:
+- name: argocd-cm
+  behavior: merge
+  options:
+    disableNameSuffixHash: true
+  files:
+  - url=config/url

@@ -61,7 +61,7 @@ KIND_CLUSTER_PREFIX="kcp-cluster-"
 : ${GLBC_DEPLOYMENTS_DIR=${KCP_GLBC_DIR}/config/deploy}
 : ${KUSTOMIZATION_DIR=${GLBC_DEPLOYMENTS_DIR}/local}
 : ${CERT_MANAGER_KUSTOMIZATION_DIR:=${KUSTOMIZATION_DIR}/cert-manager}
-
+: ${ARGOCD_KUSTOMIZATION_DIR:=${GLBC_DEPLOYMENTS_DIR}/../argocd}
 SED=sed
 if [[ "${OSTYPE}" =~ ^darwin.* ]]; then
   SED=gsed
@@ -167,10 +167,22 @@ kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployment
 kubectl create namespace kcp-glbc --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -n kcp-glbc -f ./config/default/issuer.yaml
 
+# Install ArgoCD
+
+wait_for "./bin/kustomize build ${ARGOCD_KUSTOMIZATION_DIR} | kubectl apply -f -" "ArgoCD install, run & CRDs via kustomize" "2m" "20"
+
+ports=$(docker ps --format '{{json .}}' | jq 'select(.Names == "kcp-cluster-1-control-plane").Ports')
+httpsport=$(echo $ports | sed -e 's/.*0.0.0.0\:\(.*\)->443\/tcp.*/\1/')
+ARGOCD_ADMIN_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o json | jq ".data.password" -r | base64 --decode)
+
 echo ""
 echo "The kind k8s clusters have been registered, now you should run kcp-glbc."
 echo ""
 echo "       cd ${PWD}"
 echo "       ./bin/kcp-glbc"
+echo ""
+echo "     ArgoCD: https://argocd.127.0.0.1.nip.io:$httpsport"
+echo "     username: admin"
+echo "     password: ${ARGOCD_ADMIN_PASSWORD}"
 echo ""
 echo ""
