@@ -215,6 +215,10 @@ local-setup: export DEPLOY_GLBC=${RUN_GLBC} # Optionally run GLBC after local-se
 local-setup: clean kind kcp kustomize helm build ## Setup kcp locally using kind.
 	./utils/local-setup.sh -c ${NUM_CLUSTERS} ${LOCAL_SETUP_FLAGS}
 
+.PHONY: local-argocd-setup
+local-argocd-setup: clean kind kustomize helm build
+	./utils/local-argocd-setup.sh -c ${NUM_CLUSTERS} ${LOCAL_SETUP_FLAGS}
+
 ##@ Build Dependencies
 
 ## Location to install dependencies to
