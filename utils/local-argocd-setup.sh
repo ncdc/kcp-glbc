@@ -168,12 +168,15 @@ kubectl create namespace kcp-glbc --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -n kcp-glbc -f ./config/default/issuer.yaml
 
 # Install ArgoCD
-
 wait_for "./bin/kustomize build ${ARGOCD_KUSTOMIZATION_DIR} | kubectl apply -f -" "ArgoCD install, run & CRDs via kustomize" "2m" "20"
+
+wait_for "kubectl -n argocd get secret argocd-initial-admin-secret" "ArgoCD admin secret" "2m" "5"
+ARGOCD_ADMIN_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o json | jq ".data.password" -r | base64 --decode)
 
 ports=$(docker ps --format '{{json .}}' | jq 'select(.Names == "kcp-cluster-1-control-plane").Ports')
 httpsport=$(echo $ports | sed -e 's/.*0.0.0.0\:\(.*\)->443\/tcp.*/\1/')
-ARGOCD_ADMIN_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o json | jq ".data.password" -r | base64 --decode)
+
+
 
 echo ""
 echo "The kind k8s clusters have been registered, now you should run kcp-glbc."
