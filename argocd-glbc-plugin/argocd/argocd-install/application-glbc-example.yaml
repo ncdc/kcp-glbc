@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: example-glbc-application
+spec:
+  destination:
+    name: in-cluster
+    namespace: example-glbc-application
+  project: default
+  source:
+    # TODO: Change this to glbc repo when manifests folder changes land there
+    repoURL: https://github.com/roivaz/argocd-cmp-dev-env-poc.git
+    targetRevision: share-the-plugin-as-host-mount
+    path: manifests/test-app
+  syncPolicy:
+    syncOptions:
+    - CreateNamespace=true

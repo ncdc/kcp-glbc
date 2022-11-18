@@ -278,3 +278,4 @@ verify-gen-metrics-docs: gen-metrics-docs
 	git diff --exit-code
 
 include ./config/observability/observability.mk
+include ./argocd-glbc-plugin/argocd-glbc-plugin.mk

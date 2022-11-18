@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+spec:
+  template:
+    spec:
+      automountServiceAccountToken: true
+      volumes:
+        - configMap:
+            name: cmp-plugin
+          name: cmp-plugin
+        - name: custom-tools
+          hostPath:
+            path: /plugin
+      containers:
+        - name: plugin
+          command: [/var/run/argocd/argocd-cmp-server]
+          image: registry.access.redhat.com/ubi8
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+          volumeMounts:
+            - mountPath: /var/run/argocd
+              name: var-files
+            - mountPath: /home/argocd/cmp-server/plugins
+              name: plugins
+            - mountPath: /tmp
+              name: tmp
+
+            # Register plugins into sidecar
+            - mountPath: /home/argocd/cmp-server/config/plugin.yaml
+              subPath: plugin.yaml
+              name: cmp-plugin
+
+            # Important: Mount plugin into the repo-server pod
+            - name: custom-tools
+              subPath: argocd-glbc-plugin
+              mountPath: /usr/local/bin/argocd-glbc-plugin
