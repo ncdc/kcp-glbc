@@ -3,8 +3,9 @@ package transform_endpoint
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
+
+	"github.com/kuadrant/kcp-glbc/pkg/_internal/log"
 )
 
 func mockHandler() http.HandlerFunc {
@@ -12,11 +13,12 @@ func mockHandler() http.HandlerFunc {
 
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			log.Printf("Error reading body: %v", err)
+			log.Logger.Error(err, "error reading body")
 			http.Error(w, "can't read body", http.StatusBadRequest)
 			return
 		}
 
+		log.Logger.Info(string(body))
 		fmt.Fprintln(w, string(body))
 	}
 }
