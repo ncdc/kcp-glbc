@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - argocd-install
+  - cert-manager
+  - ../../config/default
+
+patches:
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: kcp-glbc-controller-manager
+    spec:
+      template:
+        spec:
+          containers:
+            # Force glbc-controller to use the local image
+            - imagePullPolicy: Never
+              name: manager
+
+configMapGenerator:
+- name: controller-config
+  behavior: merge
+  literals:
+  - GLBC_TLS_PROVIDER=glbc-ca
+  - GLBC_ARGOCD_PLUGIN="true"

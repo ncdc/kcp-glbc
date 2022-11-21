@@ -1,16 +1,19 @@
 SELF_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 K8S_VERSION ?= 1.23.12
 
+KFILT = docker run --rm -i ryane/kfilt
+
 argocd-plugin-bin:
 	mkdir -p  $(SELF_DIR)argocd-cmp-plugin/bin
 
 KIND_ADMIN_KUBECONFIG ?= $(SELF_DIR)/kubeconfig
-argocd-start: kind argocd-cmp-plugin
+argocd-start: kind docker-build argocd-cmp-plugin
 	KUBECONFIG=$(KIND_ADMIN_KUBECONFIG) $(KIND) create cluster --wait 5m --config $(SELF_DIR)kind.yaml --image kindest/node:v${K8S_VERSION}
+	$(KIND) load docker-image quay.io/kuadrant/kcp-glbc:latest --name kind
 	@make -s argocd-setup
 
 argocd-stop:
-	kind delete cluster --name=kind || true
+	$(KIND) delete cluster --name=kind || true
 
 argocd-clean:
 	rm -rf $(SELF_DIR)kubeconfig $(SELF_DIR)argocd-cmp-plugin/bin
@@ -27,7 +30,10 @@ argocd-password:
 
 argocd-setup: export KUBECONFIG=$(KIND_ADMIN_KUBECONFIG)
 argocd-setup: kustomize
-	$(KUSTOMIZE) build $(SELF_DIR)argocd/argocd-install | kubectl apply -f -
+	$(KUSTOMIZE) build $(SELF_DIR)config/ --enable-helm --helm-command $(HELM) | $(KFILT) -k CustomResourceDefinition | kubectl apply -f -
+	@# If we don't wait for cert-manager crds to be installed glbc installation fails
+	kubectl wait --for condition=established --timeout=60s crd issuers.cert-manager.io
+	$(KUSTOMIZE) build $(SELF_DIR)config/ --enable-helm --helm-command $(HELM) | kubectl apply -f -
 	kubectl -n argocd wait deployment argocd-server --for condition=Available=True --timeout=90s
 	kubectl port-forward svc/argocd-server -n argocd 8080:80 > /dev/null  2>&1 &
 	@echo -ne "\n\n\tConnect to ArgoCD UI in https://localhost:8080\n\n"
@@ -41,7 +47,7 @@ argocd-port-forward-stop:
 
 argocd-example-glbc-application: export KUBECONFIG=$(KIND_ADMIN_KUBECONFIG)
 argocd-example-glbc-application:
-	kubectl -n argocd apply -f $(SELF_DIR)argocd/argocd-install/application-glbc-example.yaml
+	kubectl -n argocd apply -f $(SELF_DIR)config/argocd-install/application-glbc-example.yaml
 
 argocd-cmp-logs: export KUBECONFIG=$(KIND_ADMIN_KUBECONFIG)
 argocd-cmp-logs:
