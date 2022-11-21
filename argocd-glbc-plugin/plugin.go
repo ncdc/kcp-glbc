@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/urfave/cli/v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -28,14 +32,44 @@ func main() {
 								return err
 							}
 							fileExtension := filepath.Ext(file)
-							if fileExtension == ".yaml" {
-								// TODO: Parse out any Traffic Objects (Ingress/Route)
-								dat, err := os.ReadFile(file)
+							if fileExtension == ".yaml" || fileExtension == ".yml" {
+
+								resources, err := os.ReadFile(file)
 								if err != nil {
 									log.Fatal(err)
 								}
-								fmt.Println("---")
-								fmt.Println(string(dat))
+
+								dec := yaml.NewDecoder(bytes.NewReader(resources))
+
+								// a file can contain several yaml documents
+								for {
+									var value map[string]interface{}
+									err := dec.Decode(&value)
+									if err == io.EOF {
+										break
+									}
+									if err != nil {
+										return err
+									}
+
+									// we are only interested in Ingress and Route resources
+									// avoid unmarshalling anything else
+									if kind, ok := value["kind"]; !ok {
+										// should we skip instead??
+										return fmt.Errorf("found document without kind")
+									} else {
+
+										if kind == "Ingress" || kind == "Route" {
+
+											out, err := json.Marshal(value)
+											if err != nil {
+												return fmt.Errorf("error serializing to json: '%s'", err)
+											}
+											fmt.Println("---")
+											fmt.Println(string(out))
+										}
+									}
+								}
 							}
 
 							// TODO: Fetch liveState from ArgoCD ManagedResources API, parsing out any Traffic Objects
