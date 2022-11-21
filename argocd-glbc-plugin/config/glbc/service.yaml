@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kcp-glbc-transform
+spec:
+  selector:
+    app.kubernetes.io/name: kcp-glbc
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: transform

@@ -13,6 +13,8 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
+const TransformEndpoint = "http://kcp-glbc-transform.kcp-glbc.svc.cluster.local/transform"
+
 func main() {
 	app := &cli.App{
 		Name: "argocd-glbc-plugin",
@@ -62,7 +64,7 @@ func main() {
 										if kind == "Ingress" || kind == "Route" {
 											// Send the resource to the glbc transform endpoint
 											client := resty.New()
-											resp, err := client.R().SetBody(value).Post("http://10.244.0.25:8090/transform")
+											resp, err := client.R().SetBody(value).Post(TransformEndpoint)
 											if err != nil {
 												return err
 											}
