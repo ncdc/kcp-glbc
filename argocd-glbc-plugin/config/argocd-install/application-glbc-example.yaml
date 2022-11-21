@@ -9,9 +9,10 @@ spec:
   project: default
   source:
     # TODO: Change this to glbc repo when manifests folder changes land there
-    repoURL: https://github.com/roivaz/argocd-cmp-dev-env-poc.git
-    targetRevision: share-the-plugin-as-host-mount
-    path: manifests/test-app
+    repoURL: https://github.com/roivaz/kcp-glbc.git
+    targetRevision: argocd-glbc-plugin
+    path: argocd-glbc-plugin/manifests/test-app
+    plugin: {}
   syncPolicy:
     syncOptions:
     - CreateNamespace=true
