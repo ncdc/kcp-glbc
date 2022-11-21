@@ -2,13 +2,13 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/urfave/cli/v2"
 	yaml "gopkg.in/yaml.v3"
 )
@@ -60,12 +60,22 @@ func main() {
 									} else {
 
 										if kind == "Ingress" || kind == "Route" {
-
-											out, err := json.Marshal(value)
+											// Send the resource to the glbc transform endpoint
+											client := resty.New()
+											resp, err := client.R().SetBody(value).Post("http://10.244.0.25:8090/transform")
+											if err != nil {
+												return err
+											}
+											// print the transformed resource
+											fmt.Println("---")
+											fmt.Println(string(resp.Body()))
+										} else {
+											// print the resource as-is
+											fmt.Println("---")
+											out, err := yaml.Marshal(value)
 											if err != nil {
 												return fmt.Errorf("error serializing to json: '%s'", err)
 											}
-											fmt.Println("---")
 											fmt.Println(string(out))
 										}
 									}
