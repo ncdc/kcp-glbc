@@ -18,12 +18,11 @@ argocd-glbc-stop:
 
 ARGOCD_KUBECONFIG ?= $(SELF_DIR)/kubeconfig
 argocd-start: kind argocd-build-plugin
-	KUBECONFIG=$(ARGOCD_KUBECONFIG) $(KIND) create cluster --wait 5m --config $(SELF_DIR)kind.yaml --image kindest/node:v${K8S_VERSION}
-	$(KIND) load docker-image quay.io/kuadrant/kcp-glbc:latest --name kind
+	KUBECONFIG=$(ARGOCD_KUBECONFIG) $(KIND) create cluster --name argocd --wait 5m --config $(SELF_DIR)kind.yaml --image kindest/node:v${K8S_VERSION}
 	@make -s argocd-setup
 
 argocd-stop:
-	$(KIND) delete cluster --name=kind || true
+	$(KIND) delete cluster --name=argocd || true
 
 argocd-clean:
 	rm -rf $(SELF_DIR)kubeconfig $(SELF_DIR)bin
@@ -65,3 +64,11 @@ argocd-example-glbc-application:
 argocd-cmp-logs: export KUBECONFIG=$(ARGOCD_KUBECONFIG)
 argocd-cmp-logs:
 	kubectl -n argocd logs -fl "app.kubernetes.io/name=argocd-repo-server" -c plugin
+
+GLBC_POD_NAMESPACE = $(shell kubectl --kubeconfig=$(GLBC_KUBECONFIG) get pods -A | awk '/kcp-glbc-controller-manager/{print $$1}')
+argocd-glbc-logs:
+	kubectl --kubeconfig=$(GLBC_KUBECONFIG) -n $(GLBC_POD_NAMESPACE) logs -f -l app.kubernetes.io/name=kcp-glbc
+
+argocd-refresh-repo-server: export KUBECONFIG=$(ARGOCD_KUBECONFIG)
+argocd-refresh-repo-server:
+	kubectl -n argocd delete pod -l app.kubernetes.io/name=argocd-repo-server --force --grace-period=0
