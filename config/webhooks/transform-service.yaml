@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: kcp-glbc-transform
+  name: service-glbc-transform
 spec:
   selector:
     app.kubernetes.io/name: kcp-glbc

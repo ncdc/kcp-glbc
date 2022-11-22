@@ -1,9 +1,29 @@
 # Adds namespace to all resources.
 namespace: kcp-glbc
 
-bases:
+resources:
 - namespace.yaml
 - issuer.yaml
 - ../rbac
 - ../manager
 - ../manager/config
+- ../webhooks
+
+patches:
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: kcp-glbc-controller-manager
+    spec:
+      template:
+        spec:
+          containers:
+            - name: manager
+              # Force glbc-controller to use the local image
+              imagePullPolicy: IfNotPresent
+              ports:
+              # add the transform endpoint port
+              - containerPort: 8090
+                name: transform
+                protocol: TCP

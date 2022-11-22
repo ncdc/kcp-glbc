@@ -78,8 +78,6 @@ var options struct {
 	MonitoringPort int
 	// The glbc exports to use
 	ExportName string
-	// Run GLBC for argocd plugin
-	ArgocdPlugin bool
 }
 
 type APIExportClusterInformers struct {
@@ -104,9 +102,6 @@ func init() {
 	flag.StringVar(&options.Region, "region", env.GetEnvString("AWS_REGION", "eu-central-1"), "the region we should target with AWS clients")
 	//  Observability options
 	flagSet.IntVar(&options.MonitoringPort, "monitoring-port", 8080, "The port of the metrics endpoint (can be set to \"0\" to disable the metrics serving)")
-
-	// Temporary  options to make GLBC work outside of KCP
-	flagSet.BoolVar(&options.ArgocdPlugin, "glbc-argocd-plugin", env.GetEnvBool("GLBC_ARGOCD_PLUGIN", false), "Temporary flag to run GLBC integration with ArgoCD")
 
 	opts := log.Options{
 		EncoderConfigOptions: []log.EncoderConfigOption{
@@ -201,170 +196,166 @@ func main() {
 	var apiExportClusterInformers []APIExportClusterInformers
 	var controllers []Controller
 
-	if !options.ArgocdPlugin {
-		for _, name := range apiExportNames {
-			glbcAPIExport, err := kcpClient.Cluster(logicalcluster.New(options.GLBCWorkspace)).ApisV1alpha1().APIExports().Get(ctx, name, metav1.GetOptions{})
-			exitOnError(err, "Failed to get GLBC APIExport "+name)
+	for _, name := range apiExportNames {
+		glbcAPIExport, err := kcpClient.Cluster(logicalcluster.New(options.GLBCWorkspace)).ApisV1alpha1().APIExports().Get(ctx, name, metav1.GetOptions{})
+		exitOnError(err, "Failed to get GLBC APIExport "+name)
 
-			glbcVirtualWorkspaceURL, glbcIdentityHash := getAPIExportVirtualWorkspaceURLAndIdentityHash(glbcAPIExport)
-			log.Logger.Info(fmt.Sprintf("GLBC APIExport URL: %s, identityHash :%s", glbcVirtualWorkspaceURL, glbcIdentityHash))
+		glbcVirtualWorkspaceURL, glbcIdentityHash := getAPIExportVirtualWorkspaceURLAndIdentityHash(glbcAPIExport)
+		log.Logger.Info(fmt.Sprintf("GLBC APIExport URL: %s, identityHash :%s", glbcVirtualWorkspaceURL, glbcIdentityHash))
 
-			glbcVWClientConfig := rest.CopyConfig(kcpClientConfig)
-			glbcVWClientConfig.Host = glbcVirtualWorkspaceURL
+		glbcVWClientConfig := rest.CopyConfig(kcpClientConfig)
+		glbcVWClientConfig.Host = glbcVirtualWorkspaceURL
 
-			kcpKubeClient, err := kubernetes.NewClusterForConfig(glbcVWClientConfig)
-			exitOnError(err, "Failed to create KCP core client")
-			kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
+		kcpKubeClient, err := kubernetes.NewClusterForConfig(glbcVWClientConfig)
+		exitOnError(err, "Failed to create KCP core client")
+		kcpKubeInformerFactory := informers.NewSharedInformerFactory(kcpKubeClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
-			kcpDynamicClient, err := dynamic.NewClusterForConfig(glbcVWClientConfig)
-			exitOnError(err, "Failed to create KCP dynamic client")
-			kcpDynamicInformerFactory := dynamicinformer.NewDynamicSharedInformerFactory(kcpDynamicClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
+		kcpDynamicClient, err := dynamic.NewClusterForConfig(glbcVWClientConfig)
+		exitOnError(err, "Failed to create KCP dynamic client")
+		kcpDynamicInformerFactory := dynamicinformer.NewDynamicSharedInformerFactory(kcpDynamicClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
-			kcpKuadrantClient, err := kuadrantv1.NewClusterForConfig(glbcVWClientConfig)
-			exitOnError(err, "Failed to create KCP kuadrant client")
-			kcpKuadrantInformerFactory := kuadrantinformer.NewSharedInformerFactory(kcpKuadrantClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
+		kcpKuadrantClient, err := kuadrantv1.NewClusterForConfig(glbcVWClientConfig)
+		exitOnError(err, "Failed to create KCP kuadrant client")
+		kcpKuadrantInformerFactory := kuadrantinformer.NewSharedInformerFactory(kcpKuadrantClient.Cluster(logicalcluster.New(options.LogicalClusterTarget)), resyncPeriod)
 
-			clusterInformers := &APIExportClusterInformers{}
-			clusterInformers.SharedInformerFactory = kcpKubeInformerFactory
-			clusterInformers.KuadrantSharedInformerFactory = kcpKuadrantInformerFactory
-			clusterInformers.KCPDynamicInformerFactory = kcpDynamicInformerFactory
+		clusterInformers := &APIExportClusterInformers{}
+		clusterInformers.SharedInformerFactory = kcpKubeInformerFactory
+		clusterInformers.KuadrantSharedInformerFactory = kcpKuadrantInformerFactory
+		clusterInformers.KCPDynamicInformerFactory = kcpDynamicInformerFactory
 
-			isControllerLeader := len(controllers) == 0
+		isControllerLeader := len(controllers) == 0
 
-			dnsClient, domainVerifier := getDNSUtilities(os.Getenv("GLBC_HOST_RESOLVER"))
+		dnsClient, domainVerifier := getDNSUtilities(os.Getenv("GLBC_HOST_RESOLVER"))
 
-			routeController := route.NewController(&route.ControllerConfig{
+		routeController := route.NewController(&route.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			KCPKubeClient:                   kcpKubeClient,
+			KubeClient:                      kubeClient,
+			DnsRecordClient:                 kcpKuadrantClient,
+			KubeDynamicClient:               kcpDynamicClient,
+			KCPInformer:                     kcpKuadrantInformerFactory,
+			KCPSharedInformerFactory:        kcpKubeInformerFactory,
+			KCPDynamicSharedInformerFactory: kcpDynamicInformerFactory,
+			CertificateInformer:             certificateInformerFactory,
+			GlbcInformerFactory:             glbcKubeInformerFactory,
+			Domain:                          options.Domain,
+			CertProvider:                    certProvider,
+			HostResolver:                    dnsClient,
+			GLBCWorkspace:                   logicalcluster.New(options.GLBCWorkspace),
+		})
+
+		controllers = append(controllers, routeController)
+
+		ingressController := ingress.NewController(&ingress.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			KCPKubeClient:            kcpKubeClient,
+			KubeClient:               kubeClient,
+			DnsRecordClient:          kcpKuadrantClient,
+			KuadrantInformer:         kcpKuadrantInformerFactory,
+			KCPSharedInformerFactory: kcpKubeInformerFactory,
+			CertificateInformer:      certificateInformerFactory,
+			GlbcInformerFactory:      glbcKubeInformerFactory,
+			Domain:                   options.Domain,
+			CertProvider:             certProvider,
+			HostResolver:             dnsClient,
+			GLBCWorkspace:            logicalcluster.New(options.GLBCWorkspace),
+		})
+		controllers = append(controllers, ingressController)
+
+		dnsRecordController, err := dns.NewController(&dns.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			DnsRecordClient:       kcpKuadrantClient,
+			SharedInformerFactory: kcpKuadrantInformerFactory,
+			DNSProvider:           options.DNSProvider,
+		})
+		exitOnError(err, "Failed to create DNSRecord controller")
+		controllers = append(controllers, dnsRecordController)
+
+		domainVerificationController, err := domainverification.NewController(&domainverification.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			KCPKubeClient:            kcpKubeClient,
+			KubeClient:               kubeClient,
+			DomainVerificationClient: kcpKuadrantClient,
+			SharedInformerFactory:    kcpKuadrantInformerFactory,
+			DNSVerifier:              domainVerifier,
+			GLBCWorkspace:            logicalcluster.New(options.GLBCWorkspace),
+		})
+		exitOnError(err, "Failed to create DomainVerification controller")
+		controllers = append(controllers, domainVerificationController)
+
+		serviceController, err := service.NewController(&service.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			ServicesClient:        kcpKubeClient,
+			SharedInformerFactory: kcpKubeInformerFactory,
+		})
+		exitOnError(err, "Failed to create Service controller")
+
+		deploymentController, err := deployment.NewController(&deployment.ControllerConfig{
+			ControllerConfig: &reconciler.ControllerConfig{
+				NameSuffix: name,
+			},
+			DeploymentClient:      kcpKubeClient,
+			SharedInformerFactory: kcpKubeInformerFactory,
+		})
+		exitOnError(err, "Failed to create Deployment controller")
+
+		// Secret controller should not have more than one instance
+		if isControllerLeader {
+			secretController, err := secret.NewController(&secret.ControllerConfig{
 				ControllerConfig: &reconciler.ControllerConfig{
 					NameSuffix: name,
 				},
-				KCPKubeClient:                   kcpKubeClient,
-				KubeClient:                      kubeClient,
-				DnsRecordClient:                 kcpKuadrantClient,
-				KubeDynamicClient:               kcpDynamicClient,
-				KCPInformer:                     kcpKuadrantInformerFactory,
-				KCPSharedInformerFactory:        kcpKubeInformerFactory,
-				KCPDynamicSharedInformerFactory: kcpDynamicInformerFactory,
-				CertificateInformer:             certificateInformerFactory,
-				GlbcInformerFactory:             glbcKubeInformerFactory,
-				Domain:                          options.Domain,
-				CertProvider:                    certProvider,
-				HostResolver:                    dnsClient,
-				GLBCWorkspace:                   logicalcluster.New(options.GLBCWorkspace),
-			})
-
-			controllers = append(controllers, routeController)
-
-			ingressController := ingress.NewController(&ingress.ControllerConfig{
-				ControllerConfig: &reconciler.ControllerConfig{
-					NameSuffix: name,
-				},
-				KCPKubeClient:            kcpKubeClient,
-				KubeClient:               kubeClient,
-				DnsRecordClient:          kcpKuadrantClient,
-				KuadrantInformer:         kcpKuadrantInformerFactory,
-				KCPSharedInformerFactory: kcpKubeInformerFactory,
-				CertificateInformer:      certificateInformerFactory,
-				GlbcInformerFactory:      glbcKubeInformerFactory,
-				Domain:                   options.Domain,
-				CertProvider:             certProvider,
-				HostResolver:             dnsClient,
-				GLBCWorkspace:            logicalcluster.New(options.GLBCWorkspace),
-			})
-			controllers = append(controllers, ingressController)
-
-			dnsRecordController, err := dns.NewController(&dns.ControllerConfig{
-				ControllerConfig: &reconciler.ControllerConfig{
-					NameSuffix: name,
-				},
-				DnsRecordClient:       kcpKuadrantClient,
-				SharedInformerFactory: kcpKuadrantInformerFactory,
-				DNSProvider:           options.DNSProvider,
-			})
-			exitOnError(err, "Failed to create DNSRecord controller")
-			controllers = append(controllers, dnsRecordController)
-
-			domainVerificationController, err := domainverification.NewController(&domainverification.ControllerConfig{
-				ControllerConfig: &reconciler.ControllerConfig{
-					NameSuffix: name,
-				},
-				KCPKubeClient:            kcpKubeClient,
-				KubeClient:               kubeClient,
-				DomainVerificationClient: kcpKuadrantClient,
-				SharedInformerFactory:    kcpKuadrantInformerFactory,
-				DNSVerifier:              domainVerifier,
-				GLBCWorkspace:            logicalcluster.New(options.GLBCWorkspace),
-			})
-			exitOnError(err, "Failed to create DomainVerification controller")
-			controllers = append(controllers, domainVerificationController)
-
-			serviceController, err := service.NewController(&service.ControllerConfig{
-				ControllerConfig: &reconciler.ControllerConfig{
-					NameSuffix: name,
-				},
-				ServicesClient:        kcpKubeClient,
+				SecretsClient:         kcpKubeClient,
 				SharedInformerFactory: kcpKubeInformerFactory,
 			})
-			exitOnError(err, "Failed to create Service controller")
+			exitOnError(err, "Failed to create Secret controller")
 
-			deploymentController, err := deployment.NewController(&deployment.ControllerConfig{
-				ControllerConfig: &reconciler.ControllerConfig{
-					NameSuffix: name,
-				},
-				DeploymentClient:      kcpKubeClient,
-				SharedInformerFactory: kcpKubeInformerFactory,
-			})
-			exitOnError(err, "Failed to create Deployment controller")
-
-			// Secret controller should not have more than one instance
-			if isControllerLeader {
-				secretController, err := secret.NewController(&secret.ControllerConfig{
-					ControllerConfig: &reconciler.ControllerConfig{
-						NameSuffix: name,
-					},
-					SecretsClient:         kcpKubeClient,
-					SharedInformerFactory: kcpKubeInformerFactory,
-				})
-				exitOnError(err, "Failed to create Secret controller")
-
-				controllers = append(controllers, secretController)
-			}
-
-			controllers = append(controllers, deploymentController)
-			controllers = append(controllers, serviceController)
-
-			apiExportClusterInformers = append(apiExportClusterInformers, *clusterInformers)
+			controllers = append(controllers, secretController)
 		}
 
-		for _, clusterInformers := range apiExportClusterInformers {
-			clusterInformers.SharedInformerFactory.Start(ctx.Done())
-			clusterInformers.SharedInformerFactory.WaitForCacheSync(ctx.Done())
+		controllers = append(controllers, deploymentController)
+		controllers = append(controllers, serviceController)
 
-			clusterInformers.KuadrantSharedInformerFactory.Start(ctx.Done())
-			clusterInformers.KuadrantSharedInformerFactory.WaitForCacheSync(ctx.Done())
-
-			clusterInformers.KCPDynamicInformerFactory.Start(ctx.Done())
-			clusterInformers.KCPDynamicInformerFactory.WaitForCacheSync(ctx.Done())
-		}
-
-		glbcKubeInformerFactory.Start(ctx.Done())
-		glbcKubeInformerFactory.WaitForCacheSync(ctx.Done())
-
-	} else {
-		endpointsGroup.Add(1)
-		srv, err := transform_endpoint.NewServer(8090)
-		exitOnError(err, "Failed to create transform endpoint server")
-
-		go func() {
-			defer endpointsGroup.Done()
-			err := srv.Start(gCtx)
-			if err != nil {
-				log.Logger.Error(err, "transform endpoint exited with error")
-			}
-		}()
+		apiExportClusterInformers = append(apiExportClusterInformers, *clusterInformers)
 	}
 
+	for _, clusterInformers := range apiExportClusterInformers {
+		clusterInformers.SharedInformerFactory.Start(ctx.Done())
+		clusterInformers.SharedInformerFactory.WaitForCacheSync(ctx.Done())
+
+		clusterInformers.KuadrantSharedInformerFactory.Start(ctx.Done())
+		clusterInformers.KuadrantSharedInformerFactory.WaitForCacheSync(ctx.Done())
+
+		clusterInformers.KCPDynamicInformerFactory.Start(ctx.Done())
+		clusterInformers.KCPDynamicInformerFactory.WaitForCacheSync(ctx.Done())
+	}
+
+	glbcKubeInformerFactory.Start(ctx.Done())
+	glbcKubeInformerFactory.WaitForCacheSync(ctx.Done())
 	certificateInformerFactory.Start(ctx.Done())
 	certificateInformerFactory.WaitForCacheSync(ctx.Done())
+
+	endpointsGroup.Add(1)
+	srv, err := transform_endpoint.NewServer(8090)
+	exitOnError(err, "Failed to create transform endpoint server")
+
+	go func() {
+		defer endpointsGroup.Done()
+		err := srv.Start(gCtx)
+		if err != nil {
+			log.Logger.Error(err, "transform endpoint exited with error")
+		}
+	}()
 
 	for _, controller := range controllers {
 		start(gCtx, controller)

@@ -32,7 +32,7 @@ argocd-setup: export KUBECONFIG=$(KIND_ADMIN_KUBECONFIG)
 argocd-setup: kustomize
 	$(KUSTOMIZE) build $(SELF_DIR)config/ --enable-helm --helm-command $(HELM) | $(KFILT) -k CustomResourceDefinition | kubectl apply -f -
 	@# If we don't wait for cert-manager crds to be installed glbc installation fails
-	kubectl wait --for condition=established --timeout=60s crd issuers.cert-manager.io
+	# kubectl wait --for condition=established --timeout=60s crd issuers.cert-manager.io
 	$(KUSTOMIZE) build $(SELF_DIR)config/ --enable-helm --helm-command $(HELM) | kubectl apply -f -
 	kubectl -n argocd wait deployment argocd-server --for condition=Available=True --timeout=90s
 	kubectl port-forward svc/argocd-server -n argocd 8080:80 > /dev/null  2>&1 &

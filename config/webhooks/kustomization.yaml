@@ -1,0 +1,3 @@
+resources:
+  - transform-service.yaml
+  - transform-ingress.yaml
