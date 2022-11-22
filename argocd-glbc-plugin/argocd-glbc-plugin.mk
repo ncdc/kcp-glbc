@@ -1,8 +1,6 @@
 SELF_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 K8S_VERSION ?= 1.23.12
 
-KFILT = docker run --rm -i ryane/kfilt
-
 argocd-plugin-bin:
 	mkdir -p  $(SELF_DIR)bin
 
