@@ -21,7 +21,7 @@ data:
           - argocd-glbc-plugin
           - generate
           - --url
-          - http://cduj0ituqhgagi1qc3og.dev.hcpapps.net/transform
+          - http://${GLBC_HOST}/transform
           - --resolve
-          - 172.18.0.3:80
+          - ${GLBC_IP}:80
       lockRepo: false
