@@ -57,10 +57,12 @@ func NewServer(port int) (*Server, error) {
 func (s *Server) Start(ctx context.Context) (err error) {
 	errCh := make(chan error)
 
-	log.Logger.Info("Started serving transform endpoint", "address", s.listener.Addr())
-	if e := s.httpServer.Serve(s.listener); e != http.ErrServerClosed {
-		err = e
-	}
+	go func() {
+		log.Logger.Info("Started serving transform endpoint", "address", s.listener.Addr())
+		if e := s.httpServer.Serve(s.listener); e != http.ErrServerClosed {
+			errCh <- e
+		}
+	}()
 
 	select {
 
