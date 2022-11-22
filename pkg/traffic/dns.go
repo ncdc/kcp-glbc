@@ -238,9 +238,8 @@ func foundNameserversOfDomainAndIP(host, managedHost string) bool {
 	} else {
 		for _, ns := range nameservers {
 			_ = dig.At(ns.Host)
-			a, err := dig.A(managedHost)
+			a, _ := dig.A(managedHost)
 			if a != nil {
-				fmt.Println(" A record and IP address found ", a, err)
 				found = true
 				break
 			}

@@ -242,9 +242,9 @@ func TestRoute(t *testing.T) {
 		WithTransform(Annotations, And(
 			HaveKey(traffic.ANNOTATION_HCG_HOST),
 		)),
-		WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
+		WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordSucceededConditionType), MatchFieldsP(IgnoreExtras,
 			Fields{
-				"Status":  Equal("False"),
+				"Status":  Equal("True"),
 				"Reason":  Equal("ProviderSuccess"),
 				"Message": Equal("The DNS provider succeeded in ensuring the record"),
 			})),

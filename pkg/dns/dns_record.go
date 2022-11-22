@@ -81,7 +81,7 @@ func (c *Controller) publishRecordToZones(zones []v1.DNSZone, record *v1.DNSReco
 
 		condition := v1.DNSZoneCondition{
 			Status:             string(ConditionUnknown),
-			Type:               v1.DNSRecordFailedConditionType,
+			Type:               v1.DNSRecordSucceededConditionType,
 			LastTransitionTime: metav1.Now(),
 		}
 
@@ -90,24 +90,28 @@ func (c *Controller) publishRecordToZones(zones []v1.DNSZone, record *v1.DNSReco
 
 			if err := c.dnsProvider.Ensure(record, zone); err != nil {
 				c.Logger.Error(err, "Failed to replace DNS record in zone", "record", record.Spec, "zone", zone)
-				condition.Status = string(ConditionTrue)
+				condition.Status = string(ConditionFalse)
+				condition.Type = v1.DNSRecordSucceededConditionType
 				condition.Reason = "ProviderError"
 				condition.Message = fmt.Sprintf("The DNS provider failed to replace the record: %v", err)
 			} else {
 				c.Logger.Info("Replaced DNS record in zone", "record", record.Spec, "zone", zone)
-				condition.Status = string(ConditionFalse)
+				condition.Status = string(ConditionTrue)
+				condition.Type = v1.DNSRecordSucceededConditionType
 				condition.Reason = "ProviderSuccess"
 				condition.Message = "The DNS provider succeeded in replacing the record"
 			}
 		} else {
 			if err := c.dnsProvider.Ensure(record, zone); err != nil {
 				c.Logger.Error(err, "Failed to publish DNS record to zone", "record", record.Spec, "zone", zone)
-				condition.Status = string(ConditionTrue)
+				condition.Status = string(ConditionFalse)
+				condition.Type = v1.DNSRecordSucceededConditionType
 				condition.Reason = "ProviderError"
 				condition.Message = fmt.Sprintf("The DNS provider failed to ensure the record: %v", err)
 			} else {
 				c.Logger.Info("Published DNS record to zone", "record", record.Spec, "zone", zone)
-				condition.Status = string(ConditionFalse)
+				condition.Status = string(ConditionTrue)
+				condition.Type = v1.DNSRecordSucceededConditionType
 				condition.Reason = "ProviderSuccess"
 				condition.Message = "The DNS provider succeeded in ensuring the record"
 			}
@@ -155,8 +159,8 @@ func RecordIsAlreadyPublishedToZone(record *v1.DNSRecord, zoneToPublish *v1.DNSZ
 		}
 
 		for _, condition := range zoneInStatus.Conditions {
-			if condition.Type == v1.DNSRecordFailedConditionType {
-				return condition.Status == string(ConditionFalse)
+			if condition.Type == v1.DNSRecordSucceededConditionType {
+				return condition.Status == string(ConditionTrue)
 			}
 		}
 	}

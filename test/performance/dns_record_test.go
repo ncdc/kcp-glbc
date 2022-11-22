@@ -92,9 +92,9 @@ func testDNSRecord(t Test, dnsRecordCount int, zoneID, glbcDomain string) {
 	for _, record := range dnsRecords {
 		t.Eventually(DNSRecord(t, namespace, record.Name)).Should(And(
 			WithTransform(DNSRecordEndpoints, HaveLen(1)),
-			WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordFailedConditionType), MatchFieldsP(IgnoreExtras,
+			WithTransform(DNSRecordCondition(zoneID, kuadrantv1.DNSRecordSucceededConditionType), MatchFieldsP(IgnoreExtras,
 				Fields{
-					"Status":  Equal("False"),
+					"Status":  Equal("True"),
 					"Reason":  Equal("ProviderSuccess"),
 					"Message": Equal("The DNS provider succeeded in ensuring the record"),
 				})),
