@@ -5,7 +5,7 @@ argocd-plugin-bin:
 	mkdir -p  $(SELF_DIR)bin
 
 GLBC_KUBECONFIG ?= $(CLUSTERS_KUBECONFIG_DIR)/kcp-cluster-1.kubeconfig
-argocd-glbc-start:
+argocd-glbc-start: docker-build
 	$(MAKE) local-setup NUM_CLUSTERS=1 LOCAL_SETUP_BACKGROUND=1 || true
 	$(KIND) load docker-image ${IMG} --name kcp-cluster-1
 	KUBECONFIG=$(KUBECONFIG) ./utils/deploy.sh -k config/deploy/local
