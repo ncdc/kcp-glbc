@@ -61,7 +61,8 @@ set -e pipefail
 trap cleanup EXIT 1 2 3 6 15
 
 cleanup() {
-  if [[ -n ${LOCAL_SETUP_BACKGROUND} ]] then
+  if [[ -n ${LOCAL_SETUP_BACKGROUND} ]]
+  then
     echo "Exiting. Use 'pkill kcp' to shutdown kcp"
   else
     echo "Killing KCP"
