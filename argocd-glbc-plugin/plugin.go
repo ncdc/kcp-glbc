@@ -45,6 +45,12 @@ func main() {
 						Value:    ".",
 						Required: false,
 					},
+					&cli.StringFlag{
+						Name:     "token",
+						Usage:    "the argocd token",
+						Aliases:  []string{"t"},
+						Required: true,
+					},
 				},
 				Action: func(cCtx *cli.Context) error {
 					path := cCtx.String("path")
