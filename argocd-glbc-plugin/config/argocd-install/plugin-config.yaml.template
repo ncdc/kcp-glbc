@@ -24,4 +24,6 @@ data:
           - http://${GLBC_HOST}/transform
           - --resolve
           - ${GLBC_IP}:80
+          - --token
+          - ${ARGOCD_TOKEN}
       lockRepo: false
