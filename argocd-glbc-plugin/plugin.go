@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -53,13 +56,9 @@ func main() {
 					},
 				},
 				Action: func(cCtx *cli.Context) error {
-					path := cCtx.String("path")
-					url := cCtx.String("url")
-					resolve := cCtx.String("resolve")
-
 					// TODO: Sanity check path is not trying to break outside current dir
 
-					err := generate(path, url, resolve)
+					err := generate(cCtx.String("path"), cCtx.String("url"), cCtx.String("resolve"), cCtx.String("token"))
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -74,7 +73,18 @@ func main() {
 	}
 }
 
-func generate(path, url, resolve string) error {
+type Payload struct {
+	TrafficResource map[string]interface{} `json:"trafficResource"`
+	LiveState       map[string]interface{} `json:"liveState"`
+}
+
+func generate(path, url, resolve, token string) error {
+
+	// see https://blog.argoproj.io/breaking-changes-in-argo-cd-2-4-29e3c2ac30c9
+	application := os.Getenv("ARGOCD_ENV_APPLICATION_NAME")
+	if application == "" {
+		return fmt.Errorf("APPLICATION_NAME environment variable must be set in the plugin section of the Application resource")
+	}
 
 	err := filepath.Walk(path,
 		func(file string, info os.FileInfo, err error) error {
@@ -110,18 +120,44 @@ func generate(path, url, resolve string) error {
 					} else {
 
 						if kind == "Ingress" || kind == "Route" {
+
+							// Get the live state from ArgoCD API
+							argocd := resty.New()
+							// TODO: expose this as a flag
+							argocd.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+							api := strings.Join([]string{"https://argocd-server", "api/v1/applications", application, "managed-resources"}, "/")
+							resp, err := argocd.R().SetAuthToken(token).Get(api)
+							if err != nil {
+								return err
+							}
+							if !resp.IsSuccess() {
+								return fmt.Errorf("argocd api returned '%s'", resp.Status())
+							}
+
+							liveState := map[string]interface{}{}
+							err = json.Unmarshal(resp.Body(), &liveState)
+							if err != nil {
+								return err
+							}
+
 							// Send the resource to the glbc transform endpoint
-							client := resty.NewWithClient(client(resolve))
-							resp, err := client.R().SetBody(value).Post(url)
+							payload := Payload{
+								TrafficResource: value,
+								LiveState:       liveState,
+							}
+							glbc := resty.NewWithClient(client(resolve))
+							resp, err = glbc.R().SetBody(payload).Post(url)
 							if err != nil {
 								return err
 							}
 							if !resp.IsSuccess() {
 								return fmt.Errorf("transform endpoint returned '%s'", resp.Status())
 							}
+
 							// print the transformed resource
 							fmt.Println("---")
 							fmt.Println(string(resp.Body()))
+
 						} else {
 							// print the resource as-is
 							fmt.Println("---")
