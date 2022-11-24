@@ -80,10 +80,9 @@ type Payload struct {
 
 func generate(path, url, resolve, token string) error {
 
-	// see https://blog.argoproj.io/breaking-changes-in-argo-cd-2-4-29e3c2ac30c9
-	application := os.Getenv("ARGOCD_ENV_APPLICATION_NAME")
+	application := os.Getenv("ARGOCD_APP_NAME")
 	if application == "" {
-		return fmt.Errorf("APPLICATION_NAME environment variable must be set in the plugin section of the Application resource")
+		return fmt.Errorf("missing ARGOCD_APP_NAME environment variable")
 	}
 
 	err := filepath.Walk(path,

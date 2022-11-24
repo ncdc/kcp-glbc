@@ -16,13 +16,9 @@ spec:
       source:
         # TODO: Change this to glbc repo when manifests folder changes land there
         repoURL: https://github.com/roivaz/kcp-glbc.git
-        targetRevision: argocd-api-auth-spike
+        targetRevision: argocd-glbc-plugin
         path: argocd-glbc-plugin/manifests/test-app
-        plugin:
-          env:
-            # see https://blog.argoproj.io/breaking-changes-in-argo-cd-2-4-29e3c2ac30c9
-            - name: APPLICATION_NAME
-              value: '{{name}}-example-glbc-application'
+        plugin: {}
       syncPolicy:
         syncOptions:
         - CreateNamespace=true
