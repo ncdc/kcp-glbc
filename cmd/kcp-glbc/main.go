@@ -20,6 +20,8 @@ import (
 	certmanclient "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
 	certmaninformer "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
 
+	"github.com/kuadrant/kcp-glbc/pkg/superClient"
+
 	// Make sure our workqueue MetricsProvider is the first to register
 	_ "github.com/kuadrant/kcp-glbc/pkg/reconciler"
 	"github.com/kuadrant/kcp-glbc/pkg/reconciler/route"
@@ -226,15 +228,16 @@ func main() {
 		isControllerLeader := len(controllers) == 0
 
 		dnsClient, domainVerifier := getDNSUtilities(os.Getenv("GLBC_HOST_RESOLVER"))
-
+		superClient := &superClient.KCP{
+			KuadrantClient:   kcpKuadrantClient,
+			KcpKubeClient:    kcpKubeClient,
+			KcpDynamicClient: kcpDynamicClient,
+		}
 		routeController := route.NewController(&route.ControllerConfig{
 			ControllerConfig: &reconciler.ControllerConfig{
 				NameSuffix: name,
 			},
-			KCPKubeClient:                   kcpKubeClient,
-			KubeClient:                      kubeClient,
-			DnsRecordClient:                 kcpKuadrantClient,
-			KubeDynamicClient:               kcpDynamicClient,
+			SuperClient:                     superClient,
 			KCPInformer:                     kcpKuadrantInformerFactory,
 			KCPSharedInformerFactory:        kcpKubeInformerFactory,
 			KCPDynamicSharedInformerFactory: kcpDynamicInformerFactory,
@@ -252,9 +255,7 @@ func main() {
 			ControllerConfig: &reconciler.ControllerConfig{
 				NameSuffix: name,
 			},
-			KCPKubeClient:            kcpKubeClient,
-			KubeClient:               kubeClient,
-			DnsRecordClient:          kcpKuadrantClient,
+			SuperClient:              superClient,
 			KuadrantInformer:         kcpKuadrantInformerFactory,
 			KCPSharedInformerFactory: kcpKubeInformerFactory,
 			CertificateInformer:      certificateInformerFactory,
@@ -270,7 +271,7 @@ func main() {
 			ControllerConfig: &reconciler.ControllerConfig{
 				NameSuffix: name,
 			},
-			DnsRecordClient:       kcpKuadrantClient,
+			SuperClient:           superClient,
 			SharedInformerFactory: kcpKuadrantInformerFactory,
 			DNSProvider:           options.DNSProvider,
 		})
@@ -281,12 +282,10 @@ func main() {
 			ControllerConfig: &reconciler.ControllerConfig{
 				NameSuffix: name,
 			},
-			KCPKubeClient:            kcpKubeClient,
-			KubeClient:               kubeClient,
-			DomainVerificationClient: kcpKuadrantClient,
-			SharedInformerFactory:    kcpKuadrantInformerFactory,
-			DNSVerifier:              domainVerifier,
-			GLBCWorkspace:            logicalcluster.New(options.GLBCWorkspace),
+			SuperClient:           superClient,
+			SharedInformerFactory: kcpKuadrantInformerFactory,
+			DNSVerifier:           domainVerifier,
+			GLBCWorkspace:         logicalcluster.New(options.GLBCWorkspace),
 		})
 		exitOnError(err, "Failed to create DomainVerification controller")
 		controllers = append(controllers, domainVerificationController)
@@ -295,7 +294,7 @@ func main() {
 			ControllerConfig: &reconciler.ControllerConfig{
 				NameSuffix: name,
 			},
-			ServicesClient:        kcpKubeClient,
+			SuperClient:           superClient,
 			SharedInformerFactory: kcpKubeInformerFactory,
 		})
 		exitOnError(err, "Failed to create Service controller")
@@ -304,7 +303,7 @@ func main() {
 			ControllerConfig: &reconciler.ControllerConfig{
 				NameSuffix: name,
 			},
-			DeploymentClient:      kcpKubeClient,
+			SuperClient:           superClient,
 			SharedInformerFactory: kcpKubeInformerFactory,
 		})
 		exitOnError(err, "Failed to create Deployment controller")
@@ -315,7 +314,7 @@ func main() {
 				ControllerConfig: &reconciler.ControllerConfig{
 					NameSuffix: name,
 				},
-				SecretsClient:         kcpKubeClient,
+				SuperClient:           superClient,
 				SharedInformerFactory: kcpKubeInformerFactory,
 			})
 			exitOnError(err, "Failed to create Secret controller")
