@@ -38,9 +38,8 @@ $(CMP_PLUGIN): argocd-plugin-bin $(SELF_DIR)plugin.go
 PLUGIN_CONFIG ?= $(SELF_DIR)config/argocd-install/plugin-config.yaml
 GLBC_HOST = $(shell kubectl --kubeconfig $(GLBC_KUBECONFIG) get ingress -A | awk '/ingress-glbc-transform/{print $$4}')
 GLBC_IP = $(shell kubectl --kubeconfig $(GLBC_KUBECONFIG) get ingress -A | awk '/ingress-glbc-transform/{print $$5}')
-ARGOCD_TOKEN = $(shell $(MAKE) -s argocd-login && $(ARGOCD) proj role create-token example-glbc-project admin --token-only)
 argocd-plugin-config: argocd
-	ARGOCD_TOKEN=$(ARGOCD_TOKEN) GLBC_HOST=$(GLBC_HOST) GLBC_IP=$(GLBC_IP) \
+	GLBC_HOST=$(GLBC_HOST) GLBC_IP=$(GLBC_IP) \
 		envsubst < $(PLUGIN_CONFIG).template > $(PLUGIN_CONFIG)
 
 ARGOCD_PASSWD = $(shell kubectl --kubeconfig=$(ARGOCD_KUBECONFIG) -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
@@ -51,14 +50,11 @@ argocd-login: argocd
 	@$(ARGOCD) login localhost:8443 --insecure --username admin --password $(ARGOCD_PASSWD) > /dev/null
 
 argocd-setup: export KUBECONFIG=$(ARGOCD_KUBECONFIG)
-argocd-setup: kustomize
+argocd-setup: kustomize argocd-plugin-config
 	$(KUSTOMIZE) build $(SELF_DIR)config/ | $(KFILT) -i kind=CustomResourceDefinition | kubectl apply -f -
 	$(KUSTOMIZE) build $(SELF_DIR)config/ | kubectl apply -f -
 	kubectl -n argocd wait deployment argocd-server --for condition=Available=True --timeout=90s
 	kubectl port-forward svc/argocd-server -n argocd 8443:443 > /dev/null  2>&1 &
-	$(MAKE) -s argocd-plugin-config
-	$(KUSTOMIZE) build $(SELF_DIR)config/ | $(KFILT) -i kind=ConfigMap,name=cmp-plugin  | kubectl apply -f -
-	$(MAKE) -s argocd-refresh-repo-server
 	@echo -ne "\n\n\tConnect to ArgoCD UI in https://localhost:8443\n\n"
 	@echo -ne "\t\tUser: admin\n"
 	@echo -ne "\t\tPassword: "

@@ -19,4 +19,13 @@ patches:
         name: argocd-rbac-cm
       data:
         policy.default: role:admin
-
+  - target:
+      kind: ConfigMap
+      name: argocd-cm
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+      data:
+        accounts.glbc: apiKey
