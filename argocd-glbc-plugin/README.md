@@ -2,10 +2,6 @@
 
 ## Setup
 
-Start GLBC within kcp. Currently is not possible to run glbc out of kcp.
-
-`make argocd-glbc-start`
-
 Start a kind cluster and install argocd in it. ArgoCD UI is accessible at https://localhost:8080
 
 `make argocd-start`
@@ -14,20 +10,18 @@ Show the logs of the plugin. It might take a moment for the pod to start.
 
 `make argocd-cmp-logs`
 
-Show the logs for the glbc-controller
+Start glbc locally
 
-`make argocd-glbc-logs`
+`make argocd-glbc-start-local`
 
-Create an ArgoCD Application pointing to this repo
-
-`make argocd-example-glbc-application`
 
 Sync the Application from the ArgoCD UI.
+You may need to do a 'Hard Refresh'.
 If it fails to sync, it may be because:
 
 * the argocd-repo-server or some other argo component is still initializing.
 * there is a problem with the argocd-cmp-server sidecar
-* there is a problem with the argocd-glbc-lugin binary
+* there is a problem with the argocd-glbc-plugin binary
 
 Either way, check the argocd-cmp-server logs.
 If syncing was successful, you should see something like the below:
@@ -49,7 +43,7 @@ Tear down the environment with `make argocd-stop`
 ## Development
 
 * Make changes to plugin.go
-* Rebuild the plugin binary with `make argocd-cmp-plugin`
+* Rebuild the plugin binary with `make argocd-build-plugin`
 
 Note that the plugin binary is built for linux x86-64.
 The binary is mounted from the host into the argocd-repo-server pod, where it gets executed by the argocd-cmp-server.

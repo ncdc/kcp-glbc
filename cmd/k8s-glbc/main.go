@@ -40,6 +40,7 @@ import (
 	"github.com/kuadrant/kcp-glbc/pkg/superClient"
 	"github.com/kuadrant/kcp-glbc/pkg/tls"
 	"github.com/kuadrant/kcp-glbc/pkg/traffic"
+	"github.com/kuadrant/kcp-glbc/pkg/transform_endpoint"
 )
 
 const (
@@ -92,6 +93,7 @@ func init() {
 }
 
 var controllersGroup = sync.WaitGroup{}
+var endpointsGroup = sync.WaitGroup{}
 
 func main() {
 	// Logging GLBC configuration
@@ -276,6 +278,18 @@ func main() {
 	dynamicInformerFactory.Start(ctx.Done())
 	dynamicInformerFactory.WaitForCacheSync(ctx.Done())
 
+	endpointsGroup.Add(1)
+	srv, err := transform_endpoint.NewServer(8090)
+	exitOnError(err, "Failed to create transform endpoint server")
+
+	go func() {
+		defer endpointsGroup.Done()
+		err := srv.Start(gCtx)
+		if err != nil {
+			log.Logger.Error(err, "transform endpoint exited with error")
+		}
+	}()
+
 	for _, controller := range controllers {
 		start(gCtx, controller)
 	}
@@ -283,6 +297,7 @@ func main() {
 	g.Go(func() error {
 		// wait until the controllers have return before stopping serving metrics
 		controllersGroup.Wait()
+		endpointsGroup.Wait()
 		return metricsServer.Shutdown()
 	})
 

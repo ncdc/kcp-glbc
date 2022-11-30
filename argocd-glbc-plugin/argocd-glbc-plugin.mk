@@ -8,11 +8,14 @@ KFILT = docker run --rm -i ryane/kfilt
 argocd-plugin-bin:
 	mkdir -p  $(SELF_DIR)bin
 
-GLBC_KUBECONFIG ?= $(CLUSTERS_KUBECONFIG_DIR)/kcp-cluster-1.kubeconfig
 argocd-glbc-start: docker-build
 	$(MAKE) local-setup NUM_CLUSTERS=1 LOCAL_SETUP_BACKGROUND=1 || true
 	$(KIND) load docker-image ${IMG} --name kcp-cluster-1
 	KUBECONFIG=$(KUBECONFIG) ./utils/deploy.sh -k config/deploy/local
+
+argocd-glbc-start-local:
+	KUBECONFIG=$(ARGOCD_KUBECONFIG) ./cmd/k8s-glbc/local-deploy.sh
+	make build && (export $(cat ./config/deploy/local/kcp-glbc/controller-config.env.ci | xargs) && KUBECONFIG=$(ARGOCD_KUBECONFIG) ./bin/k8s-glbc)
 
 argocd-glbc-stop:
 	pkill kcp
@@ -36,10 +39,16 @@ $(CMP_PLUGIN): argocd-plugin-bin $(SELF_DIR)plugin.go
 	chmod +x $(CMP_PLUGIN)
 
 PLUGIN_CONFIG ?= $(SELF_DIR)config/argocd-install/plugin-config.yaml
-GLBC_HOST = $(shell kubectl --kubeconfig $(GLBC_KUBECONFIG) get ingress -A | awk '/ingress-glbc-transform/{print $$4}')
-GLBC_IP = $(shell kubectl --kubeconfig $(GLBC_KUBECONFIG) get ingress -A | awk '/ingress-glbc-transform/{print $$5}')
+# GLBC_HOST = $(shell kubectl --kubeconfig $(GLBC_KUBECONFIG) get ingress -A | awk '/ingress-glbc-transform/{print $$4}')
+# GLBC_IP = $(shell kubectl --kubeconfig $(GLBC_KUBECONFIG) get ingress -A | awk '/ingress-glbc-transform/{print $$5}')
+ifeq ($(OS), darwin)
+	GLBC_HOST=host.docker.internal:8090
+else
+	GLBC_HOST=172.17.0.1:8090
+endif
+
 argocd-plugin-config: argocd
-	GLBC_HOST=$(GLBC_HOST) GLBC_IP=$(GLBC_IP) \
+	GLBC_HOST=$(GLBC_HOST) \
 		envsubst < $(PLUGIN_CONFIG).template > $(PLUGIN_CONFIG)
 
 ARGOCD_PASSWD = $(shell kubectl --kubeconfig=$(ARGOCD_KUBECONFIG) -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
@@ -68,9 +77,9 @@ argocd-cmp-logs: export KUBECONFIG=$(ARGOCD_KUBECONFIG)
 argocd-cmp-logs:
 	kubectl -n argocd logs -fl "app.kubernetes.io/name=argocd-repo-server" -c plugin
 
-GLBC_POD_NAMESPACE = $(shell kubectl --kubeconfig=$(GLBC_KUBECONFIG) get pods -A | awk '/kcp-glbc-controller-manager/{print $$1}')
-argocd-glbc-logs:
-	kubectl --kubeconfig=$(GLBC_KUBECONFIG) -n $(GLBC_POD_NAMESPACE) logs -f -l app.kubernetes.io/name=kcp-glbc
+# GLBC_POD_NAMESPACE = $(shell kubectl --kubeconfig=$(GLBC_KUBECONFIG) get pods -A | awk '/kcp-glbc-controller-manager/{print $$1}')
+# argocd-glbc-logs:
+# 	kubectl --kubeconfig=$(GLBC_KUBECONFIG) -n $(GLBC_POD_NAMESPACE) logs -f -l app.kubernetes.io/name=kcp-glbc
 
 argocd-refresh-repo-server: export KUBECONFIG=$(ARGOCD_KUBECONFIG)
 argocd-refresh-repo-server:
