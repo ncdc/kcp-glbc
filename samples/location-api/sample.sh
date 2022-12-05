@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-export KUBECONFIG=./.kcp/admin.kubeconfig
+export KUBECONFIG=.kcp/admin.kubeconfig
 GLBC_WORKSPACE=root:kuadrant
 HOME_WORKSPACE='~'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,8 +35,8 @@ kubectl apply -f ${SCRIPT_DIR}/locations.yaml
 echo "creating placement in home workspace"
 kubectl kcp workspace ${HOME_WORKSPACE}
 echo "creating apibindings in home workspace"
-kubectl apply -f ./config/apiexports/kubernetes/kubernetes-apibinding.yaml
-kubectl apply -f ./config/deploy/local/kcp-glbc/apiexports/glbc/glbc-apibinding.yaml
+kubectl apply -f config/apiexports/kubernetes/kubernetes-apibinding.yaml
+kubectl apply -f config/deploy/local/kcp-glbc/apiexports/glbc/glbc-apibinding.yaml
 kubectl apply -f ${SCRIPT_DIR}/placement-1.yaml
 kubectl delete placement default
 
@@ -47,9 +47,9 @@ sleep 2
 
 echo
 echo "=== useful commands:"
-echo "  - watch -n1 \"curl -k https://"$(kubectl get ingress echo -o json | jq ".metadata.annotations[\"kuadrant.dev/host.generated\"]" -r)"\" (N.B. Don't start this before A record exists in route53)"
+echo "  - watch -n1 \"curl -k https://"$(kubectl get dnsrecord echo -o json | jq ".metadata.annotations[\"kuadrant.dev/host.generated\"]" -r)"\" (N.B. Don't start this before A record exists in route53)"
 echo "  - watch -n1 'kubectl get dnsrecords echo -o yaml | yq eval \".spec\" -'"
-echo "  - watch -n1 'dig "$(kubectl get ingress echo -o json | jq ".metadata.annotations[\"kuadrant.dev/host.generated\"]" -r)"'"
+echo "  - watch -n1 'dig "$(kubectl get dnsrecord echo -o json | jq ".metadata.annotations[\"kuadrant.dev/host.generated\"]" -r)"'"
 echo "  - watch -n1 -d 'kubectl get ingress echo -o yaml | yq eval \".metadata\" - | grep -v \"kubernetes.io\"'"
 echo
 echo
