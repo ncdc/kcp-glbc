@@ -28,6 +28,7 @@ const (
 	ProviderSpecificFailover             = "aws/failover"
 	ProviderSpecificMultiValueAnswer     = "aws/multi-value-answer"
 	ProviderSpecificHealthCheckID        = "aws/health-check-id"
+	ZoneIDEnvVar                         = "AWS_DNS_PUBLIC_ZONE_ID"
 )
 
 // Inspired by https://github.com/openshift/cluster-ingress-operator/blob/master/pkg/dns/aws/dns.go

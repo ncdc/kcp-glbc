@@ -319,7 +319,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 			return err
 		}
 	}
-	if targetStateReadWriter.TMCEnabed() {
+	if targetStateReadWriter.TMCEnabled() {
 		if !equality.Semantic.DeepEqual(currentState.Status, targetState.Status) {
 			c.Logger.V(3).Info("attempting update of status for ingress ", "ingress key ", key)
 			_, err = c.KCPKubeClient.Cluster(logicalcluster.From(targetState)).NetworkingV1().Ingresses(targetState.Namespace).UpdateStatus(ctx, targetState, metav1.UpdateOptions{})
@@ -359,7 +359,7 @@ func (c *Controller) ingressesFromDomainVerification(obj interface{}) ([]*networ
 	// TODO this can be removed once advanced scheduling is the norm
 	for _, ingress := range ingressList {
 		accessor := traffic.NewIngress(ingress)
-		if accessor.TMCEnabed() {
+		if accessor.TMCEnabled() {
 			// look at the spec
 			for _, rule := range ingress.Spec.Rules {
 				if HostMatches(rule.Host, domain) {

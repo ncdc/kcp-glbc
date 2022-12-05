@@ -24,6 +24,7 @@ type ReconcileStatus int
 const (
 	ReconcileStatusStop ReconcileStatus = iota
 	ReconcileStatusContinue
+	ReconcileStatusRequeueIn5Seconds
 
 	ANNOTATION_TRAFFIC_KEY              = "kuadrant.dev/traffic-key"
 	ANNOTATION_TRAFFIC_KIND             = "kuadrant.dev/traffic-kind"
@@ -51,6 +52,8 @@ type Interface interface {
 	GetKind() string
 	GetHosts() []string
 	GetHCGHost() string
+	HasDNSLBHost() bool
+	GetCacheKey() string
 	SetDNSLBHost(string)
 	SetHCGHost(string)
 	Transform(previous Interface) error
@@ -62,7 +65,7 @@ type Interface interface {
 	ProcessCustomHosts(context.Context, *v1.DomainVerificationList, CreateOrUpdateTraffic, DeleteTraffic) error
 	GetSyncTargets() []string
 	GetSpec() interface{}
-	TMCEnabed() bool
+	TMCEnabled() bool
 }
 
 func tmcEnabled(obj metav1.Object) bool {

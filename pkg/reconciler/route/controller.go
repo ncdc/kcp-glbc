@@ -336,7 +336,7 @@ func (c *Controller) process(ctx context.Context, key string) error {
 		if err := targetStateReadWriter.Transform(currentStateReader); err != nil {
 			return err
 		}
-		c.Logger.V(3).Info("attempting update of changed route ", "route key ", key, "TMC Enabled? ", targetStateReadWriter.TMCEnabed())
+		c.Logger.V(3).Info("attempting update of changed route ", "route key ", key, "TMC Enabled? ", targetStateReadWriter.TMCEnabled())
 		raw, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(target)
 		u = &unstructured.Unstructured{}
 		u.Object = raw

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"k8s.io/client-go/tools/cache"
 
@@ -61,6 +62,9 @@ func (c *Controller) reconcile(ctx context.Context, route *traffic.Route) error 
 		status, err := r.Reconcile(ctx, route)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error from reconciler %v, error: %v", r.GetName(), err))
+		}
+		if status == traffic.ReconcileStatusRequeueIn5Seconds {
+			c.Queue.AddAfter(route.GetCacheKey(), time.Second*5)
 		}
 		if status == traffic.ReconcileStatusStop {
 			break

@@ -151,7 +151,7 @@ func LBHostEqualToGeneratedHost(route *traffic.Route) bool {
 			equals = false
 		}
 	}
-	if !route.TMCEnabed() {
+	if !route.TMCEnabled() {
 		return !equals
 	}
 	return equals
