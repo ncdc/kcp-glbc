@@ -32,10 +32,9 @@
 			"request": "launch",
 			"mode": "auto",
 			"program": "${workspaceFolder}/cmd/kcp-glbc",
-			"args": [
-				"-kubeconfig",
-				"${workspaceFolder}/.kcp/admin.kubeconfig"
-			]
+			"env": {
+				"KUBECONFIG": "${workspaceFolder}/tmp/kcp.kubeconfig"
+			}
 		}
 	]
 }
