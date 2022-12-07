@@ -189,8 +189,8 @@ type DNSZoneStatus struct {
 }
 
 var (
-	// Failed means the record is not available within a zone.
-	DNSRecordFailedConditionType = "Failed"
+	// Succeeded means the record is available within a zone if the status condition is true.
+	DNSRecordSucceededConditionType = "Succeeded"
 )
 
 // DNSZoneCondition is just the standard condition fields.
