@@ -1,0 +1,53 @@
+apiVersion: "logging.openshift.io/v1"
+kind: ClusterLogForwarder
+metadata:
+  name: instance
+  namespace: openshift-logging
+spec:
+  inputs:
+    - name: glbc
+      application:
+        namespaces:
+          - kcp-1276jyv7ca5w
+        selector:
+          matchLabels:
+            glbc-name: kcp-stable-redhat-hcg
+    - name: cert-manager
+      application:
+        namespaces:
+          - cert-manager
+        selector:
+          matchLabels:
+            app: cert-manager
+    - name: syncer-stable
+      application:
+        namespaces:
+          - kcp-syncer-glbc-19j0riab
+        selector:
+          matchLabels:
+            app: kcp-syncer-glbc-19j0riab
+    - name: syncer-unstable
+      application:
+        namespaces:
+          - kcp-syncer-glbc-2ig0nlzg
+        selector:
+          matchLabels:
+            app: kcp-syncer-glbc-2ig0nlzg
+  outputs:
+    - cloudwatch:
+        groupBy: namespaceName
+        groupPrefix: clo-logs
+        region: eu-west-1
+      name: cloudwatch
+      secret:
+        name: instance
+      type: cloudwatch
+  pipelines:
+    - inputRefs:
+        - glbc
+        - cert-manager
+        - syncer-stable
+        - syncer-unstable
+      name: pod-logs
+      outputRefs:
+        - cloudwatch

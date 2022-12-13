@@ -1,0 +1,14 @@
+apiVersion: "logging.openshift.io/v1"
+kind: "ClusterLogging"
+metadata:
+  name: "instance"
+  namespace: "openshift-logging"
+spec:
+  managementState: "Managed"
+  collection:
+    logs:
+      fluentd:
+        resources:
+          requests:
+            memory: 736Mi
+      type: fluentd

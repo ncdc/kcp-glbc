@@ -1,0 +1,4 @@
+resources:
+  - subscription.yaml
+  - cluster-logging.yaml
+  - cluster-log-forwarder.yaml
