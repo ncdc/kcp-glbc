@@ -23,6 +23,8 @@ tmp/
 # Ignore bin directory contents
 bin/*
 
+hack/tools
+
 # Keep the bin directory
 !bin/.gitkeep
 

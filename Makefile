@@ -1,5 +1,37 @@
+# Copyright 2021 The KCP Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
+# We need bash for some conditional logic below.
 SHELL := /usr/bin/env bash
+
+#-----------------------------------------------------------------------------
+# Workaround git issues on OpenShift Prow CI, where the user running in the
+# job is not guaranteed to own the repo checkout.
+#-----------------------------------------------------------------------------
+ifeq ($(CI),true)
+   $(shell git config --global --add safe.directory '*')
+endif
+
+GO_INSTALL = ./hack/go-install.sh
+TOOLS_DIR=hack/tools
+TOOLS_GOBIN_DIR := $(abspath $(TOOLS_DIR))
+GOBIN_DIR=$(abspath ./bin)
+PATH := $(GOBIN_DIR):$(TOOLS_GOBIN_DIR):$(PATH)
+
+GOLANGCI_LINT_VER := v1.49.0
+GOLANGCI_LINT_BIN := golangci-lint
+GOLANGCI_LINT := $(TOOLS_GOBIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER)
 
 # NUM_CLUSTERS is a total number of kind clusters to be provisioned
 NUM_CLUSTERS ?= 1
@@ -63,9 +95,12 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+$(GOLANGCI_LINT):
+	GOBIN=$(TOOLS_GOBIN_DIR) $(GO_INSTALL) github.com/golangci/golangci-lint/cmd/golangci-lint $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
+
 .PHONY: lint
-lint: ## Run golangci-lint against code.
-	golangci-lint run ./...
+lint: $(GOLANGCI_LINT) ## Run golangci-lint against code.
+	$(GOLANGCI_LINT) run ./...
 
 .PHONY: test
 test: generate ## Run tests.

@@ -1,3 +1,7 @@
+run:
+  timeout: 10m
+  allow-parallel-runners: true
+
 # https://golangci-lint.run/usage/linters/
 linters:
   enable:
